@@ -155,7 +155,7 @@ const OrganizerVerificationForm = () => {
 
     const validateStep2 = () => {
         const newErrors = {};
-
+ 
         if (!formData.organizationName) newErrors.organizationName = 'Organization name is required';
         if (!formData.organizationType) newErrors.organizationType = 'Organization type is required';
         if (!formData.role) newErrors.role = 'Role/designation is required';
