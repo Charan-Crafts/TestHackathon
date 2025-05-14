@@ -71,6 +71,7 @@ export const authAPI = {
         }
         return response;
     },
+    
     login: async (credentials) => {
         const response = await API.post('/auth/login', credentials);
         if (response.data.success && response.data.token) {
