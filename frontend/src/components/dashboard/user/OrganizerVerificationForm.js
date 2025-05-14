@@ -155,7 +155,7 @@ const OrganizerVerificationForm = () => {
 
     const validateStep2 = () => {
         const newErrors = {};
- 
+
         if (!formData.organizationName) newErrors.organizationName = 'Organization name is required';
         if (!formData.organizationType) newErrors.organizationType = 'Organization type is required';
         if (!formData.role) newErrors.role = 'Role/designation is required';
@@ -188,11 +188,17 @@ const OrganizerVerificationForm = () => {
 
             // Create FormData object for file uploads
             const uploadFormData = new FormData();
-            uploadFormData.append('photoIdProof', formData.photoIdProof);
-            uploadFormData.append('organizationIdProof', formData.organizationIdProof);
+
+            // Log file details for debugging
+            console.log('Uploading photoIdProof:', formData.photoIdProof.name, formData.photoIdProof.type);
+            console.log('Uploading organizationIdProof:', formData.organizationIdProof.name, formData.organizationIdProof.type);
+
+            // Append files with proper field names
+            uploadFormData.append('photoIdProof', formData.photoIdProof, formData.photoIdProof.name);
+            uploadFormData.append('organizationIdProof', formData.organizationIdProof, formData.organizationIdProof.name);
             uploadFormData.append('entityType', 'user');
 
-            // Use verificationAPI service instead of direct axios call
+            // Use verificationAPI service
             const response = await verificationAPI.uploadProofs(uploadFormData);
 
             console.log('Upload response:', response.data);
@@ -310,11 +316,22 @@ const OrganizerVerificationForm = () => {
                 return;
             }
 
-            // Create a FormData with EXACT field names
+            // Create FormData object
             const testFormData = new FormData();
-            testFormData.append('photoIdProof', formData.photoIdProof);
-            testFormData.append('organizationIdProof', formData.organizationIdProof);
+
+            // Log file details for debugging
+            console.log('Testing photoIdProof:', formData.photoIdProof.name, formData.photoIdProof.type);
+            console.log('Testing organizationIdProof:', formData.organizationIdProof.name, formData.organizationIdProof.type);
+
+            // Append files with proper field names and filenames
+            testFormData.append('photoIdProof', formData.photoIdProof, formData.photoIdProof.name);
+            testFormData.append('organizationIdProof', formData.organizationIdProof, formData.organizationIdProof.name);
             testFormData.append('entityType', 'user');
+
+            // Log FormData contents
+            for (let pair of testFormData.entries()) {
+                console.log('FormData entry:', pair[0], pair[1]);
+            }
 
             // Use verificationAPI service
             const response = await verificationAPI.uploadProofs(testFormData);
