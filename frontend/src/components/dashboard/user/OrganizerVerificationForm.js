@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import API, { verificationAPI } from '../../../services/api';
-import axios from 'axios';
 import VerificationPending from './VerificationPending';
 
 const OrganizerVerificationForm = () => {
@@ -187,31 +186,14 @@ const OrganizerVerificationForm = () => {
                 throw new Error('Both photo ID and organization ID proofs are required');
             }
 
-            // Log file details before upload
-            console.log('Photo ID file:', formData.photoIdProof.name, formData.photoIdProof.type, formData.photoIdProof.size);
-            console.log('Org ID file:', formData.organizationIdProof.name, formData.organizationIdProof.type, formData.organizationIdProof.size);
-
-            // Create FormData object for file uploads - USING EXACT EXPECTED FIELD NAMES
+            // Create FormData object for file uploads
             const uploadFormData = new FormData();
-
-            // Use the EXACT field names as required by the server
             uploadFormData.append('photoIdProof', formData.photoIdProof);
             uploadFormData.append('organizationIdProof', formData.organizationIdProof);
-
-            // Add the entityType field with a valid enum value from the File model
-            // Valid values are: 'user', 'hackathon', 'submission', 'project', 'other'
             uploadFormData.append('entityType', 'user');
 
-            // Direct axios call with the correct field names
-            const response = await axios({
-                method: 'post',
-                url: 'http://localhost:5000/api/verifications/upload-proofs',
-                data: uploadFormData,
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
+            // Use verificationAPI service instead of direct axios call
+            const response = await verificationAPI.uploadProofs(uploadFormData);
 
             console.log('Upload response:', response.data);
 
@@ -328,28 +310,14 @@ const OrganizerVerificationForm = () => {
                 return;
             }
 
-            // Log what we're sending
-            console.log('Photo ID:', formData.photoIdProof.name, formData.photoIdProof.type);
-            console.log('Org ID:', formData.organizationIdProof.name, formData.organizationIdProof.type);
-
             // Create a FormData with EXACT field names
             const testFormData = new FormData();
             testFormData.append('photoIdProof', formData.photoIdProof);
             testFormData.append('organizationIdProof', formData.organizationIdProof);
-
-            // Add the entityType field with a valid enum value
             testFormData.append('entityType', 'user');
 
-            // Make a direct call to the server
-            const response = await axios({
-                method: 'post',
-                url: 'http://localhost:5000/api/verifications/upload-proofs',
-                data: testFormData,
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
+            // Use verificationAPI service
+            const response = await verificationAPI.uploadProofs(testFormData);
 
             console.log('Test upload response:', response.data);
             toast.success('Test upload successful!');
