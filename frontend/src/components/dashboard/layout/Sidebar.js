@@ -8,7 +8,8 @@ import {
   CodeBracketIcon,
   ArrowRightOnRectangleIcon,
   BookmarkIcon,
-  ClockIcon
+  ClockIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { PiCertificateDuotone } from "react-icons/pi";
 import { useAuth } from '../../../contexts/AuthContext';
@@ -263,8 +264,8 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen, toggleSidebar, isMobile, use
                     <NavItem to="/dashboard/user" icon={<HomeIcon />} text="Overview" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/user/hackathons" icon={<ClipboardDocumentCheckIcon />} text="Hackathons" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/user/challenges" icon={<CodeBracketIcon />} text="Challenges" isOpen={isSidebarOpen} />
-                    <NavItem to="/dashboard/user/watchlist" icon={<BookmarkIcon />} text="Watchlist" isOpen={isSidebarOpen} badge={4} />
-                    <NavItem to="/dashboard/user/history" icon={<ClockIcon />} text="Recently Viewed" isOpen={isSidebarOpen} />
+                    <NavItem to="/dashboard/find-team" icon={<UserGroupIcon />} text="Find Team" isOpen={isSidebarOpen} />
+                    <NavItem to="/dashboard/myteam" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="My Team" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/user/certificates" icon={<PiCertificateDuotone />} text="Certificates" isOpen={isSidebarOpen} />
 
                     {/* For pending organizers, show verification status instead */}
@@ -286,7 +287,7 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen, toggleSidebar, isMobile, use
                   )}
                   <ul className="space-y-1">
                     <NavItem to="/dashboard/organizer" icon={<RocketLaunchIcon />} text="Hackathons" isOpen={isSidebarOpen} />
-                    <NavItem to="/dashboard/organizer/participants" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} text="Participants" isOpen={isSidebarOpen} />
+                    <NavItem to="/dashboard/organizer/participants" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>} text="Participants" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/organizer/teams" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>} text="Teams" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/organizer/submissions" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} text="Submissions" isOpen={isSidebarOpen} />
                     <NavItem to="/dashboard/organizer/judging" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>} text="Judging" isOpen={isSidebarOpen} />

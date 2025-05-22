@@ -738,7 +738,7 @@ function ReviewStep({ formData, updateFormData, prevStep, handleSubmit, isSubmit
           <div className="flex justify-between">
             <button
               type="button"
-              onClick={() => prevStep()}
+              onClick={prevStep}
               className="px-6 py-3 bg-gray-800 text-cyan-400 rounded-lg border border-cyan-500/30 hover:bg-gray-700 transition-colors duration-200"
             >
               Previous
@@ -748,8 +748,8 @@ function ReviewStep({ formData, updateFormData, prevStep, handleSubmit, isSubmit
               onClick={handleSubmit}
               disabled={!formData.termsAccepted || isSubmitting}
               className={`px-8 py-3 rounded-lg text-white font-medium shadow-lg transition-all duration-200 ${formData.termsAccepted && !isSubmitting
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-cyan-500/20 hover:shadow-cyan-500/40'
-                : 'bg-gray-600 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-cyan-500/20 hover:shadow-cyan-500/40'
+                  : 'bg-gray-600 cursor-not-allowed'
                 }`}
             >
               {isSubmitting ? (

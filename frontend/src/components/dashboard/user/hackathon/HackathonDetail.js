@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { hackathonAPI } from '../../../../services/api';
-import { roundResponseAPI } from '../../../../services/api';
+import { roundResponseAPI, teamAPI } from '../../../../services/api';
 import Confetti from 'react-confetti';
+import EligibilityCheckStep from '../../../../pages/hackathons/registration/steps/EligibilityCheckStep';
 
 const HackathonDetail = () => {
   const { hackathonId } = useParams();
@@ -18,6 +19,33 @@ const HackathonDetail = () => {
   const [customFieldResponses, setCustomFieldResponses] = useState({});
   const [roundStatuses, setRoundStatuses] = useState([]);
   const [showCongrats, setShowCongrats] = useState(false);
+  const [teamRole, setTeamRole] = useState(null);
+  const [showEligibilityCheck, setShowEligibilityCheck] = useState(false);
+  const [eligibilityData, setEligibilityData] = useState({ branch: '', percentage: '' });
+  const [eligibilityError, setEligibilityError] = useState('');
+  const [isEligible, setIsEligible] = useState(false);
+
+  // Add function to check team role
+  const checkTeamRole = async () => {
+    try {
+      console.log('Checking team role for hackathon:', hackathonId);
+      const response = await teamAPI.checkTeamRole(hackathonId);
+      console.log('Team role response:', response.data);
+
+      if (response.data && response.data.success) {
+        setTeamRole(response.data.data);
+      }
+    } catch (error) {
+      console.error(`Error checking team role for hackathon ${hackathonId}:`, error);
+      setTeamRole({
+        status: 'ERROR',
+        message: 'Error checking team status',
+        isRegistered: false,
+        isTeamLeader: false,
+        isTeamMember: false
+      });
+    }
+  };
 
   useEffect(() => {
     if (!hackathonId) {
@@ -27,18 +55,14 @@ const HackathonDetail = () => {
     }
 
     setLoading(true);
-    hackathonAPI.getHackathonById(hackathonId)
-      .then(res => {
+    Promise.all([
+      hackathonAPI.getHackathonById(hackathonId),
+      checkTeamRole()
+    ])
+      .then(([res]) => {
         if (res.data && res.data.success) {
-          // Ensure team property exists with default values
-          const hackathonData = {
-            ...res.data.data,
-            team: res.data.data.team || {
-              members: [],
-              isLeader: false
-            }
-          };
-          setHackathon(hackathonData);
+          console.log('Hackathon Data:', res.data.data);
+          setHackathon(res.data.data);
         } else {
           setError('Hackathon not found');
         }
@@ -141,6 +165,11 @@ const HackathonDetail = () => {
       setShowCongrats(true);
     }
   }, [hackathon, roundStatuses]);
+
+  // Add debug log for teamRole
+  useEffect(() => {
+    console.log('Team Role Data:', teamRole);
+  }, [teamRole]);
 
   if (loading) return <div className="text-center text-gray-300 py-10">Loading...</div>;
   if (error) return (
@@ -281,23 +310,30 @@ const HackathonDetail = () => {
 
   // Helper: Should the round be accessible?
   const isRoundAccessible = (idx, roundStatuses) => {
+    // First round is always accessible
     if (idx === 0) return true;
-    const prevRound = hackathon.rounds[idx - 1];
+
     const currentRound = hackathon.rounds[idx];
-    const prevStatus = roundStatuses[idx - 1];
+    const prevRound = hackathon.rounds[idx - 1];
+    const prevRoundSubmitted = submissionStatus[prevRound._id || prevRound.id];
+    const currentRoundSubmitted = submissionStatus[currentRound._id || currentRound.id];
 
-    // If previous round is completed and user didn't submit, block access
-    if (prevRound.status === 'completed' && !submissionStatus[prevRound._id || prevRound.id]) {
+    // If this round has been submitted, it should be accessible to view
+    if (currentRoundSubmitted) {
+      return true;
+    }
+
+    // If previous round is unqualified, block access
+    if (roundStatuses[idx - 1] === 'unqualified') {
       return false;
     }
 
-    // If previous round status is unqualified, block access
-    if (prevStatus === 'unqualified') {
-      return false;
+    // If previous round is submitted and current round is active/completed, allow access
+    if (prevRoundSubmitted && (currentRound.status === 'active' || currentRound.status === 'completed')) {
+      return true;
     }
 
-    // Allow access if the round is active or if it's a reactivated round
-    return currentRound.status === 'active' || currentRound.reactivatedAt;
+    return false;
   };
 
   // Modify handleSubmitSolution to use roundResponseAPI
@@ -407,6 +443,26 @@ const HackathonDetail = () => {
     }
 
     setSubmitting(prev => ({ ...prev, [round._id || round.id]: false }));
+  };
+
+  // Handle eligibility check result
+  const handleEligibilityResult = (result) => {
+    if (result.error) {
+      setEligibilityError(result.error);
+    } else {
+      // User is eligible, proceed to registration
+      setShowEligibilityCheck(false);
+      navigate(`/hackathon/register/${hackathonId}`);
+    }
+  };
+
+  // Update the registration button click handler
+  const handleRegisterClick = () => {
+    if (hackathon.eligibility && hackathon.eligibility.includes('Students Only')) {
+      setShowEligibilityCheck(true);
+    } else {
+      navigate(`/hackathon/register/${hackathonId}`);
+    }
   };
 
   return (
@@ -524,30 +580,75 @@ const HackathonDetail = () => {
           </div>
         </div>
 
-        {/* Team Section - Moved to top */}
+        {/* Team Section */}
         <div className="bg-gray-900/70 rounded-xl border border-gray-700/40 p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-cyan-300">Team</h3>
-            <button
-              onClick={handleManageTeam}
-              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded"
-            >
-              Manage Team
-            </button>
+            <h3 className="text-lg font-semibold text-cyan-300">Team Information</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {hackathon.team.members.map(member => (
-              <div key={member.id} className="bg-gray-800/60 rounded-lg p-4">
-                <div className="flex items-center">
-                  <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full mr-3" />
+
+          {teamRole && (
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-400 mb-2">
+                <span>Team Status</span>
+                <span className={`px-2 py-0.5 rounded-full ${teamRole.status === 'TEAM_LEADER' ? 'bg-purple-900/50 text-purple-300 border border-purple-500/30' :
+                  teamRole.status === 'TEAM_MEMBER' ? 'bg-blue-900/50 text-blue-300 border border-blue-500/30' :
+                    teamRole.status === 'REGISTERED_NO_TEAM' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-500/30' :
+                      'bg-gray-900/50 text-gray-300 border border-gray-500/30'
+                  }`}>
+                  {teamRole.message}
+                </span>
+              </div>
+
+              {teamRole.team && (
+                <div className="text-sm text-gray-400">
+                  <div className="flex justify-between items-center mb-2">
+                    <span>Team: {teamRole.team.teamName}</span>
+                  </div>
                   <div>
-                    <div className="text-white font-medium">{member.name}</div>
-                    <div className="text-sm text-gray-400">{member.role}</div>
+                    <span>Members: {teamRole.team.currentSize}/{teamRole.team.maxSize}</span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          )}
+
+          {/* Team Members List */}
+          {teamRole?.team?.teammates && teamRole.team.teammates.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3">
+              {teamRole.team.teammates.map(teammate => (
+                <div key={teammate.id} className="bg-gray-800/60 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <img
+                      src={teammate.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${teammate.id}`}
+                      alt={teammate.name}
+                      className="w-12 h-12 rounded-full mr-3"
+                    />
+                    <div className="flex-grow">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-white font-medium">{teammate.name}</div>
+                          <div className="text-sm text-gray-400">{teammate.email}</div>
+                        </div>
+                        <div className={`px-2 py-1 rounded-full text-xs ${teammate.role === 'leader'
+                          ? 'bg-purple-900/50 text-purple-300 border border-purple-500/30'
+                          : 'bg-blue-900/50 text-blue-300 border border-blue-500/30'
+                          }`}>
+                          {teammate.role === 'leader' ? 'Team Leader' : 'Member'}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Joined: {new Date(teammate.joinedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-400 py-4">
+              No team members found
+            </div>
+          )}
         </div>
 
         {/* Problem Statement */}
@@ -649,15 +750,32 @@ const HackathonDetail = () => {
                       {/* Submission Status */}
                       <div className="mt-4">
                         <h5 className="text-sm font-medium text-gray-300 mb-2">Submission Status</h5>
-                        {isCompleted && !hasSubmitted ? (
-                          <span className="text-red-400">Not Qualified for the next round. Better luck next time.</span>
-                        ) : !isActive && !isCompleted ? (
-                          <span className="text-yellow-400">Coming Soon</span>
-                        ) : isActive && !hasSubmitted ? (
-                          <span className="text-red-400">Not Submitted</span>
-                        ) : hasSubmitted ? (
-                          <span className="text-green-400">Submitted</span>
-                        ) : null}
+                        {(() => {
+                          if (round.status === 'upcoming') {
+                            return (
+                              <div>
+                                <span className="text-yellow-400">Coming Soon</span>
+                                <div className="text-sm text-gray-400 mt-1">
+                                  Starts on {new Date(round.startDate).toLocaleDateString()}
+                                  {round.startTime ? ` at ${formatTime(round.startTime)}` : ''}
+                                </div>
+                              </div>
+                            );
+                          } else if (round.status === 'active') {
+                            return hasSubmitted ? (
+                              <span className="text-green-400">Submitted</span>
+                            ) : (
+                              <span className="text-red-400">Not Submitted</span>
+                            );
+                          } else if (round.status === 'completed') {
+                            return hasSubmitted ? (
+                              <span className="text-green-400">Submitted</span>
+                            ) : (
+                              <span className="text-red-400">Not Submitted - Round Ended</span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       {/* Submission Message */}
@@ -667,203 +785,131 @@ const HackathonDetail = () => {
                         </div>
                       )}
 
-                      {/* Submission Form or Locked View */}
-                      {accessible ? (
-                        hasSubmitted ? (
-                          <div className="mb-4 font-semibold">
-                            {status === 'qualified' && (
-                              <span className="text-green-400">Congratulations! You are qualified for the next round.</span>
-                            )}
-                            {status === 'unqualified' && isCompleted && !hasSubmitted && (
-                              <span className="text-red-400">You are not qualified for the next round. Better luck next time.</span>
-                            )}
-                            {status === 'evaluated' && (
-                              <span className="text-blue-400">Your submission has been evaluated.</span>
-                            )}
-                            {status === 'reviewed' && (
-                              <span className="text-blue-400">Your submission has been reviewed.</span>
-                            )}
-                            {status === 'awarded' && (
-                              <span className="text-yellow-400">Congratulations! You have been awarded for this round.</span>
-                            )}
-                            {status === 'submitted' && (
-                              <span className="text-green-400">Your submission is recorded. Please wait for the result.</span>
-                            )}
-                          </div>
-                        ) : round.status === 'active' && isFormEditable(status) ? (
-                          <div className="mb-4 flex flex-col gap-2">
-                            {round.platformLink && (
-                              <a
-                                href={round.platformLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => {
-                                  const uuid = round.platformLink.split('/').pop();
-                                  console.log('Test ID:', uuid);
-                                }}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                              >
-                                Access Platform
-                              </a>
-                            )}
-
-                            {round.customFields && round.customFields.length > 0 && (
-                              <div className="mt-4 space-y-4">
-                                <h5 className="text-sm font-medium text-gray-300">Required Information</h5>
-                                <div className="space-y-3">
+                      {/* Round Status Message */}
+                      {!accessible ? (
+                        <div className="mt-2 p-2 bg-red-900/30 border border-red-700/30 rounded text-red-300 text-sm">
+                          {round.status === 'upcoming'
+                            ? 'This round has not started yet.'
+                            : !submissionStatus[hackathon.rounds[idx - 1]?._id || hackathon.rounds[idx - 1]?.id]
+                              ? 'Complete the previous round to unlock this round.'
+                              : 'This round is not yet accessible.'}
+                        </div>
+                      ) : hasSubmitted ? (
+                        <div className="mb-4 font-semibold">
+                          {status === 'qualified' && (
+                            <span className="text-green-400">Congratulations! You are qualified for the next round.</span>
+                          )}
+                          {status === 'unqualified' && round.status === 'completed' && (
+                            <span className="text-red-400">You are not qualified for the next round. Better luck next time.</span>
+                          )}
+                          {status === 'evaluated' && (
+                            <span className="text-blue-400">Your submission has been evaluated.</span>
+                          )}
+                          {status === 'reviewed' && (
+                            <span className="text-blue-400">Your submission has been reviewed.</span>
+                          )}
+                          {status === 'awarded' && (
+                            <span className="text-yellow-400">Congratulations! You have been awarded for this round!</span>
+                          )}
+                          {status === 'submitted' && (
+                            <span className="text-green-400">Your submission is recorded. Please wait for the result.</span>
+                          )}
+                          {!status && round.status === 'completed' && (
+                            <span className="text-gray-400">This round has been completed.</span>
+                          )}
+                        </div>
+                      ) : round.status === 'active' && isFormEditable(status) ? (
+                        <div className="mb-4 flex flex-col gap-2">
+                          {round.platformLink && (
+                            <a
+                              href={round.platformLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => {
+                                const uuid = round.platformLink.split('/').pop();
+                                console.log('Test ID:', uuid);
+                              }}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                            >
+                              Access Platform
+                            </a>
+                          )}
+                          {teamRole?.status === 'TEAM_LEADER' ? (
+                            <div className="space-y-4">
+                              {round.customFields && round.customFields.length > 0 && (
+                                <div className="space-y-4 bg-gray-800/50 rounded-lg p-4">
+                                  <h5 className="text-sm font-medium text-gray-300">Submission Details</h5>
                                   {round.customFields.map((field) => (
-                                    <div key={field.id} className="bg-gray-900/50 rounded-lg p-4">
-                                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        {field.name}
-                                        {field.required && <span className="text-red-400 ml-1">*</span>}
+                                    <div key={field.id} className="space-y-2">
+                                      <label className="block text-sm font-medium text-gray-300">
+                                        {field.name} {field.required && <span className="text-red-500">*</span>}
                                       </label>
-
                                       {field.type === 'text' && (
                                         <input
                                           type="text"
                                           value={customFieldResponses[round._id || round.id]?.[field.id] || ''}
                                           onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                          placeholder="Enter your answer"
-                                          required={field.required}
+                                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
                                         />
                                       )}
-
-                                      {field.type === 'paragraph' && (
+                                      {field.type === 'textarea' && (
                                         <textarea
                                           value={customFieldResponses[round._id || round.id]?.[field.id] || ''}
                                           onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                          rows="3"
-                                          placeholder="Enter your detailed answer"
-                                          required={field.required}
+                                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                                          rows="4"
+                                          placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
                                         />
                                       )}
-
-                                      {field.type === 'multiple_choice' && (
-                                        <div className="space-y-2">
-                                          {field.options.map((option) => (
-                                            <label key={option} className="flex items-center space-x-2">
-                                              <input
-                                                type="radio"
-                                                name={`field-${field.id}`}
-                                                value={option}
-                                                checked={customFieldResponses[round._id || round.id]?.[field.id] === option}
-                                                onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                                className="form-radio text-cyan-500"
-                                                required={field.required}
-                                              />
-                                              <span className="text-gray-300">{option}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )}
-
-                                      {field.type === 'checkbox' && (
-                                        <div className="space-y-2">
-                                          {field.options.map((option) => (
-                                            <label key={option} className="flex items-center space-x-2">
-                                              <input
-                                                type="checkbox"
-                                                value={option}
-                                                checked={customFieldResponses[round._id || round.id]?.[field.id]?.includes(option)}
-                                                onChange={(e) => {
-                                                  const currentValues = customFieldResponses[round._id || round.id]?.[field.id] || [];
-                                                  const newValues = e.target.checked
-                                                    ? [...currentValues, option]
-                                                    : currentValues.filter(v => v !== option);
-                                                  handleCustomFieldChange(round._id || round.id, field.id, newValues);
-                                                }}
-                                                className="form-checkbox text-cyan-500"
-                                                required={field.required}
-                                              />
-                                              <span className="text-gray-300">{option}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )}
-
-                                      {field.type === 'dropdown' && (
-                                        <select
-                                          value={customFieldResponses[round._id || round.id]?.[field.id] || ''}
-                                          onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                          required={field.required}
-                                        >
-                                          <option value="">Select an option</option>
-                                          {field.options.map((option) => (
-                                            <option key={option} value={option}>{option}</option>
-                                          ))}
-                                        </select>
-                                      )}
-
                                       {field.type === 'file' && (
-                                        <div className="flex items-center space-x-2">
-                                          <input
-                                            type="file"
-                                            className="hidden"
-                                            id={`file-${field.id}`}
-                                            onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.files[0])}
-                                            required={field.required}
-                                          />
-                                          <label
-                                            htmlFor={`file-${field.id}`}
-                                            className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors"
-                                          >
-                                            Choose File
-                                          </label>
-                                          <span className="text-sm text-gray-400">
-                                            {customFieldResponses[round._id || round.id]?.[field.id]?.name || 'No file chosen'}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {field.type === 'date' && (
                                         <input
-                                          type="date"
-                                          value={customFieldResponses[round._id || round.id]?.[field.id] || ''}
-                                          onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                          required={field.required}
+                                          type="file"
+                                          onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.files[0])}
+                                          className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-cyan-600 file:text-white hover:file:bg-cyan-700"
+                                          accept={field.accept || '*/*'}
                                         />
                                       )}
-
-                                      {field.type === 'time' && (
+                                      {field.type === 'url' && (
                                         <input
-                                          type="time"
+                                          type="url"
                                           value={customFieldResponses[round._id || round.id]?.[field.id] || ''}
                                           onChange={(e) => handleCustomFieldChange(round._id || round.id, field.id, e.target.value)}
-                                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                          required={field.required}
+                                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                                          placeholder={field.placeholder || "Enter URL"}
                                         />
+                                      )}
+                                      {field.description && (
+                                        <p className="text-sm text-gray-400">{field.description}</p>
                                       )}
                                     </div>
                                   ))}
                                 </div>
-                              </div>
-                            )}
-
-                            <button
-                              onClick={() => handleSubmitSolution(round)}
-                              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg flex items-center gap-2 transition-colors shadow-lg hover:shadow-green-500/20"
-                              disabled={submitting[round._id || round.id]}
-                            >
-                              {submitting[round._id || round.id] ? 'Submitting...' : 'Submit Solution'}
-                            </button>
-                            {submitMessage[round._id || round.id] && (
-                              <div className="mt-2 text-red-400 font-semibold">{submitMessage[round._id || round.id]}</div>
-                            )}
-                          </div>
-                        ) : round.status === 'completed' && !submissionStatus[round._id || round.id] ? (
-                          <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-700/30 rounded text-yellow-300 text-sm">
-                            This round has ended. You missed the submission deadline.
-                          </div>
-                        ) : null
-                      ) : (
-                        <div className="mt-2 p-2 bg-red-900/30 border border-red-700/30 rounded text-red-300 text-sm">
-                          You are not qualified for the next round. Better luck next time.
+                              )}
+                              <button
+                                onClick={() => handleSubmitSolution(round)}
+                                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg flex items-center gap-2 transition-colors shadow-lg hover:shadow-green-500/20"
+                                disabled={submitting[round._id || round.id]}
+                              >
+                                {submitting[round._id || round.id] ? 'Submitting...' : 'Submit Solution'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-yellow-400 text-sm bg-yellow-900/30 p-3 rounded-lg border border-yellow-700/30">
+                              Only the team leader can submit solutions for this round.
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ) : round.status === 'completed' ? (
+                        <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-700/30 rounded text-yellow-300 text-sm">
+                          This round has ended. You missed the submission deadline.
+                        </div>
+                      ) : round.status === 'upcoming' ? (
+                        <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700/30 rounded text-blue-300 text-sm">
+                          This round will start on {new Date(round.startDate).toLocaleDateString()}
+                          {round.startTime ? ` at ${formatTime(round.startTime)}` : ''}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 });
@@ -887,6 +933,30 @@ const HackathonDetail = () => {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Register button if not already registered */}
+      {!teamRole?.isRegistered && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={handleRegisterClick}
+            className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded-lg transition-colors"
+          >
+            Register Now
+          </button>
+        </div>
+      )}
+
+      {/* Show EligibilityCheckStep if needed */}
+      {showEligibilityCheck && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-lg">
+            <EligibilityCheckStep
+              hackathon={hackathon}
+              nextStep={handleEligibilityResult}
+            />
           </div>
         </div>
       )}

@@ -46,6 +46,10 @@ function HostHackathon() {
     submissionRequirements: '',
     judgingCriteria: [],
 
+    // Academic Prerequisites
+    tenthMarks: '',
+    twelfthMarks: '',
+
     // Timeline/Rounds - simplified
     rounds: [],
 
@@ -246,38 +250,31 @@ function HostHackathon() {
 
   // Update form data
   const updateFormData = (data) => {
-    setFormData(prevData => ({
-      ...prevData,
-      ...data
-    }));
+    setFormData(prevData => ({ ...prevData, ...data }));
   };
 
-  // Move to next step
-  const nextStep = () => {
-    setCurrentStep(prev => Math.min(prev + 1, 5));
-    window.scrollTo(0, 0);
+  // Handle next step
+  const handleNextStep = () => {
+    if (currentStep < 5) {
+      setCurrentStep(prev => prev + 1);
+      window.scrollTo(0, 0);
+    }
   };
 
-  // Directly go to a specific step (used by the step indicator)
+  // Handle previous step
+  const handlePrevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(prev => prev - 1);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  // Go to specific step
   const goToStep = (step) => {
     if (step <= currentStep) {
-      setIsNavigating(true);
       setCurrentStep(step);
       window.scrollTo(0, 0);
-      setIsNavigating(false);
     }
-  };
-
-  // Move to previous step
-  const prevStep = (step) => {
-    setIsNavigating(true);
-    if (step) {
-      setCurrentStep(step);
-    } else {
-      setCurrentStep(prev => Math.max(prev - 1, 1));
-    }
-    window.scrollTo(0, 0);
-    setIsNavigating(false);
   };
 
   // Handle final submission
@@ -285,84 +282,87 @@ function HostHackathon() {
     try {
       setIsSubmitting(true);
 
-      // Create a copy of formData without removing image fields
-      const hackathonData = { ...formData };
+      // Construct the payload explicitly for the API call
+      // Include File objects directly as expected by hackathonAPI.create
+      const payload = {
+        // Basic Info
+        title: formData.title,
+        organizer: formData.organizer,
+        description: formData.description,
+        longDescription: formData.longDescription,
+        aboutEvent: formData.aboutEvent,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        registrationDeadline: formData.registrationDeadline,
+        location: formData.location,
+        locationType: formData.locationType,
+        // Pass File objects directly
+        imageFile: formData.imageFile,
+        brochureFile: formData.brochureFile,
+
+        // Status and Categories
+        status: formData.status,
+        category: formData.category,
+        technology: formData.technology,
+
+        // Participation Details
+        maxTeamSize: formData.maxTeamSize,
+        participants: formData.participants,
+        prize: formData.prize,
+
+        // Details
+        eligibility: formData.eligibility,
+        rules: formData.rules,
+        submissionRequirements: formData.submissionRequirements,
+        judgingCriteria: formData.judgingCriteria,
+
+        // Academic Prerequisites
+        tenthMarks: formData.tenthMarks,
+        twelfthMarks: formData.twelfthMarks,
+
+        // Timeline/Rounds
+        rounds: formData.rounds,
+        submissionTypeOptions: formData.submissionTypeOptions,
+
+        // Prizes Details
+        prizeDetails: formData.prizeDetails,
+
+        // Judges
+        judges: formData.judges,
+
+        // FAQ
+        faqs: formData.faqs,
+
+        // Terms & Conditions
+        termsAccepted: formData.termsAccepted,
+
+        // Other potential fields
+        whatsappLink: formData.whatsappLink,
+        discordLink: formData.discordLink,
+        participantBenefits: formData.participantBenefits,
+        registrationFees: formData.registrationFees
+      };
 
       // Clean up judges array
-      if (hackathonData.judges && Array.isArray(hackathonData.judges)) {
-        hackathonData.judges = hackathonData.judges.map(judge => {
-          // Remove image if it's not a valid ObjectId
-          if (!judge.image || typeof judge.image !== 'string' || judge.image.startsWith('blob:') || judge.image === '') {
-            const { image, ...rest } = judge;
-            return rest;
-          }
-          return judge;
-        });
-      }
-
-      // Format coOrganizers
-      if (hackathonData.coOrganizers) {
-        try {
-          // If it's a string, parse it
-          if (typeof hackathonData.coOrganizers === 'string') {
-            hackathonData.coOrganizers = JSON.parse(hackathonData.coOrganizers);
-          }
-          // Ensure it's an array and format each entry
-          if (Array.isArray(hackathonData.coOrganizers)) {
-            hackathonData.coOrganizers = hackathonData.coOrganizers
-              .filter(org => org && typeof org === 'object')
-              .map(org => ({
-                name: org.name || '',
-                contact: org.contact || '',
-                email: org.email || ''
-              }))
-              .filter(org => org.name && org.email); // Only keep valid entries
-          } else {
-            hackathonData.coOrganizers = [];
-          }
-        } catch (e) {
-          console.error('Error formatting coOrganizers:', e);
-          hackathonData.coOrganizers = [];
-        }
-      } else {
-        hackathonData.coOrganizers = [];
-      }
-
-      // Deep clean: Remove any image fields in all nested objects/arrays
-      const deepClean = (obj) => {
-        if (Array.isArray(obj)) {
-          return obj.map(deepClean);
-        } else if (obj && typeof obj === 'object') {
-          const cleaned = {};
-          for (const key in obj) {
-            if (key === 'image' && (obj[key] === '' || (typeof obj[key] === 'string' && obj[key].startsWith('blob:')))) {
-              continue;
+      if (payload.judges && Array.isArray(payload.judges)) {
+        payload.judges = payload.judges
+          .filter(judge => judge.name)
+          .map(judge => {
+            if (!judge.image || (typeof judge.image === 'string' && judge.image.startsWith('blob:'))) {
+              const { image, ...rest } = judge;
+              return rest;
             }
-            cleaned[key] = deepClean(obj[key]);
-          }
-          return cleaned;
-        }
-        return obj;
-      };
-      const cleanedPayload = deepClean(hackathonData);
+            return judge;
+          });
+      }
 
-      // Log to verify
-      console.log('Payload sent to backend:', {
-        ...cleanedPayload,
-        imageFile: formData.imageFile,
-        image: formData.image
-      });
-
-      // Create the hackathon
-      const response = await hackathonAPI.createHackathon({
-        ...cleanedPayload,
-        imageFile: formData.imageFile,
-        image: formData.image
-      });
+      // Call the API to create the hackathon
+      const response = await hackathonAPI.create(payload);
 
       if (response.data.success) {
         // Show success message
         toast.success('Hackathon created successfully!');
+        setIsSubmitted(true);
 
         // Navigate to organizer dashboard after a short delay
         setTimeout(() => {
@@ -371,7 +371,8 @@ function HostHackathon() {
       }
     } catch (error) {
       console.error('Error creating hackathon:', error);
-      toast.error('Failed to create hackathon. Please try again.');
+      const apiError = handleApiError(error);
+      toast.error(apiError.message || 'Failed to create hackathon. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -379,55 +380,62 @@ function HostHackathon() {
 
   // Render current step
   const renderStep = () => {
-    // Add isNavigating flag to allow bypassing validation when navigating directly
     switch (currentStep) {
       case 1:
-        return <BasicInfoStep
-          formData={formData}
-          updateFormData={updateFormData}
-          nextStep={nextStep}
-          isNavigating={isNavigating}
-        />;
+        return (
+          <div className="bg-gray-800/40 backdrop-blur-md rounded-xl p-6 border border-indigo-500/20 shadow-2xl relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full filter blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full filter blur-3xl"></div>
+            <BasicInfoStep
+              formData={formData}
+              updateFormData={updateFormData}
+              nextStep={handleNextStep}
+              isNavigating={isNavigating}
+              hackathonId={id}
+            />
+          </div>
+        );
       case 2:
-        return <DetailsStep
-          formData={formData}
-          updateFormData={updateFormData}
-          nextStep={nextStep}
-          prevStep={prevStep}
-          isNavigating={isNavigating}
-        />;
+        return (
+          <div className="bg-gray-800/40 backdrop-blur-md rounded-xl p-6 border border-indigo-500/20 shadow-2xl relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full filter blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full filter blur-3xl"></div>
+            <DetailsStep formData={formData} updateFormData={updateFormData} nextStep={handleNextStep} />
+          </div>
+        );
       case 3:
-        return <RoundsStep
-          formData={formData}
-          updateFormData={updateFormData}
-          nextStep={nextStep}
-          prevStep={prevStep}
-          isNavigating={isNavigating}
-        />;
+        return (
+          <div className="bg-gray-800/40 backdrop-blur-md rounded-xl p-6 border border-indigo-500/20 shadow-2xl relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full filter blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full filter blur-3xl"></div>
+            <RoundsStep formData={formData} updateFormData={updateFormData} nextStep={handleNextStep} />
+          </div>
+        );
       case 4:
-        return <PrizesStep
-          formData={formData}
-          updateFormData={updateFormData}
-          nextStep={nextStep}
-          prevStep={prevStep}
-          isNavigating={isNavigating}
-        />;
+        return (
+          <div className="bg-gray-800/40 backdrop-blur-md rounded-xl p-6 border border-indigo-500/20 shadow-2xl relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full filter blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/10 rounded-full filter blur-3xl"></div>
+            <PrizesStep formData={formData} updateFormData={updateFormData} nextStep={handleNextStep} />
+          </div>
+        );
       case 5:
-        return <ReviewStep
-          formData={formData}
-          updateFormData={updateFormData}
-          prevStep={prevStep}
-          handleSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isNavigating={isNavigating}
-        />;
+        return (
+          <div className="bg-gray-800/40 backdrop-blur-md rounded-xl p-6 border border-indigo-500/20 shadow-2xl relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full filter blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/10 rounded-full filter blur-3xl"></div>
+            <ReviewStep
+              formData={formData}
+              updateFormData={updateFormData}
+              prevStep={handlePrevStep}
+              handleSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+              isNavigating={isNavigating}
+            />
+          </div>
+        );
       default:
-        return <BasicInfoStep
-          formData={formData}
-          updateFormData={updateFormData}
-          nextStep={nextStep}
-          isNavigating={isNavigating}
-        />;
+        return null;
     }
   };
 
@@ -503,45 +511,112 @@ function HostHackathon() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-bl from-gray-800/70 via-purple-900/10 to-gray-800/70 py-8 sm:py-12 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Progress indicator */}
-        <div className="mb-10">
-          <div className="flex justify-between items-center">
-            {[1, 2, 3, 4, 5].map(step => (
-              <button
-                key={step}
-                onClick={() => step <= currentStep && goToStep(step)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center font-medium ${step < currentStep
-                  ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white cursor-pointer'
-                  : step === currentStep
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white ring-4 ring-indigo-500/30'
-                    : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                  }`}
-                disabled={step > currentStep}
-              >
-                {step < currentStep ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  step
-                )}
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-6 px-4 relative">
+      {/* Background effects */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full filter blur-[100px]"></div>
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full filter blur-[100px]"></div>
+
+      <div className="max-w-5xl mx-auto">
+        {/* Header - More compact */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3">
+            {id ? 'Edit Hackathon' : 'Create New Hackathon'}
+          </h1>
+          <p className="text-gray-400 text-base max-w-2xl mx-auto">
+            {id ? 'Update your hackathon details below' : 'Fill in the details below to create your new hackathon'}
+          </p>
+        </div>
+
+        {/* Progress Steps - More compact */}
+        <div className="mb-8 max-w-4xl mx-auto">
+          <div className="flex items-center justify-between relative">
+            {/* Progress bar background */}
+            <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-0.5 bg-gray-700"></div>
+
+            {/* Active progress bar */}
+            <div
+              className="absolute left-0 top-1/2 transform -translate-y-1/2 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+              style={{ width: `${((currentStep - 1) / 4) * 100}%` }}
+            ></div>
+
+            {/* Step indicators */}
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div key={step} className="relative z-10">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-medium text-sm transition-all duration-300 ${currentStep >= step
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-purple-500/30'
+                    : 'bg-gray-700 text-gray-400'
+                    }`}
+                >
+                  {step}
+                </div>
+                <div className={`absolute -bottom-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap text-xs font-medium ${currentStep >= step ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                  {step === 1 && 'Basic Info'}
+                  {step === 2 && 'Details'}
+                  {step === 3 && 'Rounds'}
+                  {step === 4 && 'Prizes'}
+                  {step === 5 && 'Review'}
+                </div>
+              </div>
             ))}
-          </div>
-          <div className="flex justify-between mt-2">
-            <div className="text-center w-1/5 text-sm font-medium text-blue-400">Basic Info</div>
-            <div className="text-center w-1/5 text-sm font-medium text-blue-400">Details</div>
-            <div className="text-center w-1/5 text-sm font-medium text-blue-400">Timeline</div>
-            <div className="text-center w-1/5 text-sm font-medium text-blue-400">Prizes & Judges</div>
-            <div className="text-center w-1/5 text-sm font-medium text-blue-400">Review</div>
           </div>
         </div>
 
-        {/* Main form container */}
-        <div className="bg-gray-800/40 backdrop-filter backdrop-blur-md rounded-xl p-8 shadow-xl border border-indigo-500/20 relative overflow-hidden mb-8">
+        {/* Form Steps */}
+        <div className="max-w-4xl mx-auto mb-6">
           {renderStep()}
+        </div>
+
+        {/* Navigation Buttons - More compact */}
+        <div className="max-w-4xl mx-auto flex justify-between items-center mt-8">
+          {currentStep > 1 && (
+            <button
+              onClick={handlePrevStep}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-all duration-300 flex items-center space-x-2 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Previous</span>
+            </button>
+          )}
+
+          {currentStep < 5 ? (
+            <button
+              onClick={handleNextStep}
+              className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg text-sm font-medium transition-all duration-300 flex items-center space-x-2 group"
+            >
+              <span>Next</span>
+              <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="ml-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg text-sm font-medium transition-all duration-300 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit Hackathon</span>
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

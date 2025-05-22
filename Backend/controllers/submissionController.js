@@ -1,6 +1,7 @@
 const Submission = require('../models/Submission');
 const Hackathon = require('../models/Hackathon');
 const { handleApiError } = require('../utils/errorHandler');
+const axios = require('axios');
 
 // @desc    Get all submissions for an organizer's hackathons
 // @route   GET /api/submissions/organizer
@@ -227,5 +228,33 @@ exports.getTestLinkUUID = async (req, res) => {
         });
     } catch (error) {
         handleApiError(res, error);
+    }
+};
+
+// @desc    Get test details from external API
+// @route   GET /api/submissions/test-details/:testId
+// @access  Private (Organizer only)
+exports.getTestDetailsFromExternalAPI = async (req, res) => {
+    try {
+        const { testId } = req.params;
+
+        // Make request to external API
+        const response = await axios.get(`https://testapi.nexterchat.com/api/submissions/test/uuid/${testId}`);
+
+        if (response.data) {
+            res.status(200).json({
+                success: true,
+                data: response.data
+            });
+        } else {
+            throw new Error('No data received from external API');
+        }
+    } catch (error) {
+        console.error('Error fetching test details from external API:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch test details from external API',
+            error: error.message
+        });
     }
 }; 

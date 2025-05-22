@@ -6,7 +6,8 @@ const {
     getHackathonSubmissions,
     getOrganizerSubmissionStats,
     getSubmissionById,
-    getTestLinkUUID
+    getTestLinkUUID,
+    getTestDetailsFromExternalAPI
 } = require('../controllers/submissionController');
 
 // Protect all routes
@@ -18,5 +19,6 @@ router.get('/organizer/stats', authorize('organizer'), getOrganizerSubmissionSta
 router.get('/hackathon/:hackathonId', authorize('organizer'), getHackathonSubmissions);
 router.get('/:submissionId', authorize('organizer'), getSubmissionById);
 router.get('/test-link/:submissionId', authorize('organizer'), getTestLinkUUID);
+router.get('/test-details/:testId', authorize('organizer'), getTestDetailsFromExternalAPI);
 
 module.exports = router; 

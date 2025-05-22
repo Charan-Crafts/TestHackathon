@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { UsersIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { UsersIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon, CheckCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import { verificationAPI, userAPI } from '../../../../services/api';
 import API from '../../../../services/api';
 
 const UserManagement = () => {
@@ -17,10 +18,6 @@ const UserManagement = () => {
     total: 0,
     totalPages: 0
   });
-  const selectedFilters = {
-    role: 'all',
-    status: 'all'
-  };
 
   // Helper functions for badge styling
   const getRoleColor = (role) => {
@@ -62,7 +59,7 @@ const UserManagement = () => {
       setIsLoading(true);
       try {
         // Fetch verification requests
-        const verificationResponse = await API.verificationAPI.getAllVerifications(pagination.page, pagination.limit);
+        const verificationResponse = await verificationAPI.getAllVerifications(pagination.page, pagination.limit);
 
         if (verificationResponse.data.success) {
           setVerificationRequests(verificationResponse.data.data);
@@ -75,7 +72,7 @@ const UserManagement = () => {
         }
 
         // Fetch users
-        const usersResponse = await API.userAPI.getAllUsers(pagination.page, pagination.limit);
+        const usersResponse = await userAPI.getAllUsers(pagination.page, pagination.limit);
         if (usersResponse.data.success) {
           setUsers(usersResponse.data.data);
         }
@@ -93,33 +90,16 @@ const UserManagement = () => {
   }, [pagination.page, pagination.limit]);
 
   // Filter users based on search query
-  const filteredUsers = users.filter(user => {
-    // Check role and status filters
-    const matchesFilters = (
-      (selectedFilters.role === 'all' || user.role === selectedFilters.role) && 
-      (selectedFilters.status === 'all' || user.status === selectedFilters.status)
-    );
-
-    // Check search query
-    const matchesSearch = (
-      !searchQuery || (
-        user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.role?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    );
-
-    return matchesFilters && matchesSearch;
-  });
+  const filteredUsers = users.filter(user =>
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.role?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Function to get verification request for a user
   const getVerificationForUser = (userId) => {
-    return verificationRequests.find(req => (
-      req.userId === userId
-    ));
+    return verificationRequests.find(req => req.userId === userId);
   };
-
-
 
   const handleViewOrganizer = async (user) => {
     setSelectedUser(user);
@@ -131,7 +111,7 @@ const UserManagement = () => {
 
       if (verification) {
         // If we have the verification ID, fetch the complete details
-        const response = await API.verificationAPI.getVerificationById(verification._id);
+        const response = await verificationAPI.getVerificationById(verification._id);
         if (response.data.success) {
           setSelectedVerification(response.data.data);
         }
@@ -150,7 +130,7 @@ const UserManagement = () => {
 
   const handleApproveVerification = async (verificationId) => {
     try {
-      const response = await API.verificationAPI.reviewVerification(verificationId, {
+      const response = await verificationAPI.reviewVerification(verificationId, {
         status: 'approved',
         notes: 'Approved by admin'
       });
@@ -158,7 +138,7 @@ const UserManagement = () => {
       if (response.data.success) {
         toast.success('Organizer approved successfully');
         // Refresh verification requests
-        const updatedResponse = await API.verificationAPI.getAllVerifications(pagination.page, pagination.limit);
+        const updatedResponse = await verificationAPI.getAllVerifications(pagination.page, pagination.limit);
         if (updatedResponse.data.success) {
           setVerificationRequests(updatedResponse.data.data);
         }
@@ -171,7 +151,7 @@ const UserManagement = () => {
 
   const handleRejectVerification = async (verificationId, reason = 'Rejected by admin') => {
     try {
-      const response = await API.verificationAPI.reviewVerification(verificationId, {
+      const response = await verificationAPI.reviewVerification(verificationId, {
         status: 'rejected',
         rejectionReason: reason
       });
@@ -179,7 +159,7 @@ const UserManagement = () => {
       if (response.data.success) {
         toast.success('Organizer verification rejected');
         // Refresh verification requests
-        const updatedResponse = await API.verificationAPI.getAllVerifications(pagination.page, pagination.limit);
+        const updatedResponse = await verificationAPI.getAllVerifications(pagination.page, pagination.limit);
         if (updatedResponse.data.success) {
           setVerificationRequests(updatedResponse.data.data);
         }
@@ -286,7 +266,7 @@ const UserManagement = () => {
                               color: getStatusColor(request.status).text
                             }}
                           >
-                            {((request.status && request.status.charAt(0).toUpperCase()) + request.status.slice(1)) || 'Unknown'}
+                            {request.status && request.status.charAt(0).toUpperCase() + request.status.slice(1) || 'Unknown'}
                           </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -412,7 +392,7 @@ const UserManagement = () => {
                           color: getRoleColor(user.role).text
                         }}
                       >
-                        {(user.role && (user.role.charAt(0).toUpperCase() + user.role.slice(1))) || 'Unknown'}
+                        {user.role && user.role.charAt(0).toUpperCase() + user.role.slice(1) || 'Unknown'}
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -422,7 +402,7 @@ const UserManagement = () => {
                           color: getStatusColor(user.status).text
                         }}
                       >
-                        {(user.status && (user.status.charAt(0).toUpperCase() + user.status.slice(1))) || 'Unknown'}
+                        {user.status && user.status.charAt(0).toUpperCase() + user.status.slice(1) || 'Unknown'}
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -552,6 +532,7 @@ const UserManagement = () => {
 const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [verificationDetails, setVerificationDetails] = useState(null);
+  const [statusChange, setStatusChange] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -584,22 +565,42 @@ const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
           updatedAt: verification.updatedAt,
           status: verification.status
         });
+
         // Fetch file names for proofs if they are IDs
         if (verification.photoIdProof && verification.photoIdProof.length === 24) {
           setPhotoIdFileName(''); // loading
-          fetch(`http://localhost:5000/api/files/id/${verification.photoIdProof}`)
-            .then(res => res.json())
-            .then(data => setPhotoIdFileName(data.data.fileName))
-            .catch(() => setPhotoIdFileName(null));
+          API.get(`/files/id/${verification.photoIdProof}`)
+            .then(res => {
+              if (res.data.success && res.data.data) {
+                setPhotoIdFileName(res.data.data.fileName);
+              } else {
+                setPhotoIdFileName(null);
+                toast.error('Failed to load photo ID proof');
+              }
+            })
+            .catch(() => {
+              setPhotoIdFileName(null);
+              toast.error('Failed to load photo ID proof');
+            });
         } else {
           setPhotoIdFileName(null);
         }
+
         if (verification.organizationIdProof && verification.organizationIdProof.length === 24) {
           setOrgIdFileName(''); // loading
-          fetch(`http://localhost:5000/api/files/id/${verification.organizationIdProof}`)
-            .then(res => res.json())
-            .then(data => setOrgIdFileName(data.data.fileName))
-            .catch(() => setOrgIdFileName(null));
+          API.get(`/files/id/${verification.organizationIdProof}`)
+            .then(res => {
+              if (res.data.success && res.data.data) {
+                setOrgIdFileName(res.data.data.fileName);
+              } else {
+                setOrgIdFileName(null);
+                toast.error('Failed to load organization ID proof');
+              }
+            })
+            .catch(() => {
+              setOrgIdFileName(null);
+              toast.error('Failed to load organization ID proof');
+            });
         } else {
           setOrgIdFileName(null);
         }
@@ -654,7 +655,7 @@ const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
         rejectionReason: actionType === 'rejected' ? rejectionReason : undefined
       };
 
-      const response = await API.verificationAPI.reviewVerification(verification._id, reviewData);
+      const response = await verificationAPI.reviewVerification(verification._id, reviewData);
 
       if (response.data.success) {
         // Update the local state
@@ -716,10 +717,10 @@ const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
                           : 'bg-yellow-500/20 text-yellow-400'
                       }`}>
                       {
-                        (!verificationDetails?.status) ? 'Unknown' :
-                          (verificationDetails.status === 'pending') ? 'Pending' :
-                            (verificationDetails.status === 'approved') ? 'Approved' :
-                              (verificationDetails.status === 'rejected') ? 'Rejected' :
+                        !verificationDetails?.status ? 'Unknown' :
+                          verificationDetails.status === 'pending' ? 'Pending' :
+                            verificationDetails.status === 'approved' ? 'Approved' :
+                              verificationDetails.status === 'rejected' ? 'Rejected' :
                                 `${verificationDetails.status.charAt(0).toUpperCase()}${verificationDetails.status.slice(1)}`
                       }
                     </span>
@@ -800,17 +801,25 @@ const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <span className="ml-2 text-white">{verificationDetails.personalDetails.photoIdProof}</span>
-                        {(verificationDetails.personalDetails.photoIdProof && verificationDetails.personalDetails.photoIdProof !== 'Not provided') && (
+                        {verificationDetails.personalDetails.photoIdProof && verificationDetails.personalDetails.photoIdProof !== 'Not provided' && (
                           photoIdFileName === '' ? (
                             <span className="ml-2 text-xs text-gray-400">Loading...</span>
                           ) : photoIdFileName === null ? (
                             <span className="ml-2 text-xs text-red-400">File not found</span>
                           ) : (
                             <a
-                              href={`http://localhost:5000/uploads/${photoIdFileName}`}
+                              href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/${photoIdFileName}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="ml-2 px-2 py-1 bg-indigo-600/70 text-white text-xs rounded hover:bg-indigo-700 transition-colors flex items-center"
+                              onClick={(e) => {
+                                // Add error handling for file access
+                                e.preventDefault();
+                                const url = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/${photoIdFileName}`;
+                                window.open(url, '_blank').onerror = () => {
+                                  toast.error('Failed to open file. Please try again later.');
+                                };
+                              }}
                             >
                               <svg className="h-3.5 w-3.5 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -865,17 +874,25 @@ const ViewDetailsModal = ({ isOpen, onClose, user, verification }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <span className="ml-2 text-white">{verificationDetails.organizationDetails.organizationIdProof}</span>
-                        {(verificationDetails.organizationDetails.organizationIdProof && verificationDetails.organizationDetails.organizationIdProof !== 'Not provided') && (
+                        {verificationDetails.organizationDetails.organizationIdProof && verificationDetails.organizationDetails.organizationIdProof !== 'Not provided' && (
                           orgIdFileName === '' ? (
                             <span className="ml-2 text-xs text-gray-400">Loading...</span>
                           ) : orgIdFileName === null ? (
                             <span className="ml-2 text-xs text-red-400">File not found</span>
                           ) : (
                             <a
-                              href={`http://localhost:5000/uploads/${orgIdFileName}`}
+                              href={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/${orgIdFileName}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="ml-2 px-2 py-1 bg-indigo-600/70 text-white text-xs rounded hover:bg-indigo-700 transition-colors flex items-center"
+                              onClick={(e) => {
+                                // Add error handling for file access
+                                e.preventDefault();
+                                const url = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/${orgIdFileName}`;
+                                window.open(url, '_blank').onerror = () => {
+                                  toast.error('Failed to open file. Please try again later.');
+                                };
+                              }}
                             >
                               <svg className="h-3.5 w-3.5 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

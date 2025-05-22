@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { hackathonAPI, registrationAPI, profileAPI } from '../../../services/api';
+import { getImageUrl } from '../../../utils/imageHelper';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Import step components
 import PersonalInfoStep from './steps/PersonalInfoStep';
@@ -9,15 +11,22 @@ import TeamInfoStep from './steps/TeamInfoStep';
 import ProjectInfoStep from './steps/ProjectInfoStep';
 import ReviewStep from './steps/ReviewStep';
 import SuccessStep from './steps/SuccessStep';
+import EligibilityCheckStep from './steps/EligibilityCheckStep';
+import AcademicMarksStep from './steps/AcademicMarksStep';
 
 function HackRegistration() {
   const { hackathonId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [hackathon, setHackathon] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const [eligibilityChecked, setEligibilityChecked] = useState(false);
+  const [eligibilityData, setEligibilityData] = useState({});
+  const [eligibilityError, setEligibilityError] = useState("");
+  const [academicMarks, setAcademicMarks] = useState(null);
 
   // Form data state
   const [formData, setFormData] = useState({
@@ -73,17 +82,31 @@ function HackRegistration() {
       setLoading(true);
       setError(null);
       try {
+        console.log('Fetching hackathon with ID:', hackathonId);
         const response = await hackathonAPI.getHackathonById(hackathonId);
-        if (response.data.success) {
+        console.log('API Response:', response);
+
+        if (response.data && response.data.success) {
           const h = response.data.data;
+          console.log('Hackathon data:', h);
+          // Parse stringified arrays if needed
+          if (h.eligibility && typeof h.eligibility[0] === 'string' && h.eligibility[0].startsWith('[')) {
+            try { h.eligibility = JSON.parse(h.eligibility[0]); } catch { }
+          }
+          if (h.studentBranches && typeof h.studentBranches[0] === 'string' && h.studentBranches[0].startsWith('[')) {
+            try { h.studentBranches = JSON.parse(h.studentBranches[0]); } catch { }
+          }
+          if (h.judgingCriteria && typeof h.judgingCriteria[0] === 'string' && h.judgingCriteria[0].startsWith('[')) {
+            try { h.judgingCriteria = JSON.parse(h.judgingCriteria[0]); } catch { }
+          }
           setHackathon({
             id: h._id,
             name: h.title,
             description: h.description,
             dates: h.startDate && h.endDate ? `${new Date(h.startDate).toLocaleDateString()} - ${new Date(h.endDate).toLocaleDateString()}` : '',
             registrationDeadline: h.registrationDeadline ? new Date(h.registrationDeadline).toLocaleDateString() : '',
-            logo: h.imageFile?.fileUrl || '',
-            bannerImage: h.imageFile?.fileUrl || '',
+            logo: getImageUrl(h.imagePath) || `https://picsum.photos/seed/${h._id}/100/100`,
+            bannerImage: getImageUrl(h.imagePath) || `https://picsum.photos/seed/${h._id}/400/200`,
             categories: (h.technology && h.technology.length > 0
               ? h.technology
               : (h.category ? [h.category] : [])
@@ -95,15 +118,26 @@ function HackRegistration() {
             maxTeamSize: h.maxTeamSize,
             rules: h.rules,
             eligibility: h.eligibility,
+            studentBranches: h.studentBranches || [],
+            studentMinPercentage: h.studentMinPercentage,
+            tenthMarks: h.tenthMarks || 0,
+            twelfthMarks: h.twelfthMarks || 0,
             rounds: h.rounds,
             judges: h.judges,
             faqs: h.faqs,
             aboutEvent: h.aboutEvent || h.longDescription || h.description
           });
         } else {
+          console.error('API response indicates failure:', response);
           setError('Hackathon not found');
         }
       } catch (err) {
+        console.error('Error fetching hackathon:', err);
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
         setError('Failed to fetch hackathon details');
       } finally {
         setLoading(false);
@@ -140,69 +174,117 @@ function HackRegistration() {
 
   // Handle form submission
   const handleSubmit = async () => {
-    // Get user from localStorage (or AuthContext if available)
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user || !user._id) {
-      alert('You must be logged in to register.');
-      return;
-    }
-
-    // Validate required fields
-    if (!formData.phoneNumber) {
-      alert('Phone number is required');
-      return;
-    }
-
-    // Debug logs
-    console.log('Form Data:', formData);
-    console.log('Phone Number from form:', formData.phoneNumber);
-
-    const registrationPayload = {
-      hackathonId: hackathonId,
-      userId: user._id,
-      personalInfo: {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phoneNumber // Changed from phoneNumber to phone to match backend expectation
-      },
-      professionalInfo: {
-        role: formData.role,
-        experience: formData.experience,
-        skills: formData.skills,
-        github: formData.github,
-        portfolio: formData.portfolio
-      },
-      teamInfo: {
-        teamName: formData.teamName,
-        teamSize: formData.teamSize,
-        lookingForTeam: formData.lookingForTeam,
-        teammates: formData.teammates
-      },
-      projectInfo: {
-        projectTitle: formData.projectTitle,
-        projectDescription: formData.projectDescription,
-        techStack: formData.techStack,
-        category: formData.category
-      }
-    };
-
-    // Debug log the final payload
-    console.log('Registration Payload:', registrationPayload);
-
     try {
-      const res = await registrationAPI.createRegistration(registrationPayload);
-      if (res.data.success) {
+      setLoading(true);
+      setError(null);
+
+      // Validate required fields
+      if (!formData.firstName || !formData.lastName || !formData.email || !formData.phoneNumber) {
+        setError('Please fill in all required personal information fields');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.role || !formData.experience) {
+        setError('Please fill in all required professional information fields');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.projectTitle || !formData.projectDescription) {
+        setError('Please fill in all required project information fields');
+        setLoading(false);
+        return;
+      }
+
+      if (!user?._id) {
+        setError('User authentication required. Please log in again.');
+        setLoading(false);
+        return;
+      }
+
+      // Reset form data to prevent error messages from being included
+      const cleanFormData = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        phoneNumber: formData.phoneNumber.trim(),
+        role: formData.role.trim(),
+        experience: formData.experience.trim(),
+        skills: Array.isArray(formData.skills) ? formData.skills : [],
+        github: formData.github?.trim() || '',
+        portfolio: formData.portfolio?.trim() || '',
+        teamName: formData.teamName?.trim() || '',
+        teamSize: parseInt(formData.teamSize) || 1,
+        lookingForTeam: Boolean(formData.lookingForTeam),
+        teammates: Array.isArray(formData.teammates) ? formData.teammates : [],
+        projectTitle: formData.projectTitle.trim(),
+        projectDescription: formData.projectDescription.trim(),
+        techStack: Array.isArray(formData.techStack) ? formData.techStack : [],
+        category: formData.category?.trim() || ''
+      };
+
+      // Format the registration data according to the backend model
+      const registrationData = {
+        hackathonId,
+        userId: user._id,
+        personalInfo: {
+          firstName: cleanFormData.firstName,
+          lastName: cleanFormData.lastName,
+          email: cleanFormData.email,
+          phone: cleanFormData.phoneNumber
+        },
+        professionalInfo: {
+          role: cleanFormData.role,
+          experience: cleanFormData.experience,
+          skills: cleanFormData.skills,
+          github: cleanFormData.github,
+          portfolio: cleanFormData.portfolio
+        },
+        teamInfo: {
+          teamName: cleanFormData.teamName,
+          teamSize: cleanFormData.teamSize,
+          lookingForTeam: cleanFormData.lookingForTeam,
+          teammates: cleanFormData.teammates
+        },
+        projectInfo: {
+          projectTitle: cleanFormData.projectTitle,
+          projectDescription: cleanFormData.projectDescription,
+          techStack: cleanFormData.techStack,
+          category: cleanFormData.category
+        }
+      };
+
+      // Include academic marks if available
+      if (academicMarks && typeof academicMarks === 'object') {
+        registrationData.academicMarks = {
+          tenthMarks: Number(academicMarks.tenthMarks) || 0,
+          twelfthMarks: Number(academicMarks.twelfthMarks) || 0
+        };
+      }
+
+      // If it's a student-only hackathon, include eligibility data
+      if (hackathon?.eligibility?.includes('Students Only') && eligibilityData) {
+        registrationData.eligibilityData = eligibilityData;
+      }
+
+      console.log('Submitting registration data:', registrationData);
+
+      const response = await registrationAPI.createRegistration(registrationData);
+
+      if (response.data && response.data.success) {
         setShowSuccess(true);
         setTimeout(() => {
           navigate('/dashboard/user');
         }, 3000);
       } else {
-        alert('Registration failed. Please try again.');
+        setError(response.data?.message || 'Registration failed. Please try again.');
       }
     } catch (err) {
       console.error('Registration error:', err);
-      alert('Registration failed: ' + (err.response?.data?.message || err.message));
+      setError(err.response?.data?.message || err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -210,6 +292,42 @@ function HackRegistration() {
   const renderStep = () => {
     if (showSuccess) {
       return <SuccessStep hackathon={hackathon} />;
+    }
+    // First, show academic marks step for all hackathons
+    if (!academicMarks) {
+      console.log('Rendering AcademicMarksStep with hackathon data:', hackathon);
+      return (
+        <AcademicMarksStep
+          hackathon={hackathon}
+          onNext={(data) => {
+            console.log('Academic marks submitted:', data);
+            setAcademicMarks(data);
+            setCurrentStep(1); // Explicitly set to PersonalInfoStep instead of using nextStep()
+          }}
+        />
+      );
+    }
+    // Then, if it's a student-only hackathon, show eligibility check
+    if (
+      hackathon &&
+      hackathon.eligibility &&
+      hackathon.eligibility.includes('Students Only') &&
+      !eligibilityChecked
+    ) {
+      return (
+        <EligibilityCheckStep
+          hackathon={hackathon}
+          onNext={() => setCurrentStep(1)}
+          onEligibilityChecked={(data) => {
+            setEligibilityData(data);
+            setEligibilityChecked(true);
+            setCurrentStep(1); // Explicitly set to PersonalInfoStep
+          }}
+          onEligibilityError={(error) => {
+            setEligibilityError(error);
+          }}
+        />
+      );
     }
     switch (currentStep) {
       case 1:
@@ -326,7 +444,11 @@ function HackRegistration() {
               <img
                 src={hackathon.logo}
                 alt={hackathon.name}
-                className="h-16 w-16 object-contain"
+                className="h-16 w-16 object-contain rounded-full"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://picsum.photos/seed/${hackathon.id}/100/100`;
+                }}
               />
             </div>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400 mb-2">

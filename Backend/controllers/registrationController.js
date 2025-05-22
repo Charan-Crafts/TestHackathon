@@ -18,8 +18,7 @@ exports.getRegistrations = async (req, res) => {
         if (req.query.userId) filter.userId = req.query.userId;
         const registrations = await Registration.find(filter)
             .populate('hackathonId')
-            .populate('userId')
-            .populate('teamId');
+            .populate('userId');
         res.status(200).json({ success: true, data: registrations });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -31,8 +30,7 @@ exports.getRegistrationById = async (req, res) => {
     try {
         const registration = await Registration.findById(req.params.id)
             .populate('hackathonId')
-            .populate('userId')
-            .populate('teamId');
+            .populate('userId');
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
         }

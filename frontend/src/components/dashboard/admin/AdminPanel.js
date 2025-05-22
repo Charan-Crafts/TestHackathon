@@ -1,7 +1,8 @@
 import React from 'react';
-import { 
-  UsersIcon, 
+import {
+  UsersIcon,
   PresentationChartLineIcon,
+  WrenchScrewdriverIcon,
   DocumentCheckIcon,
   ShieldCheckIcon,
   CogIcon,
@@ -12,34 +13,34 @@ import {
 const AdminPanel = ({ user }) => {
   // Mock stats for admin dashboard
   const quickStats = [
-    { 
-      id: 1, 
-      name: 'Total Users', 
-      value: 2845, 
+    {
+      id: 1,
+      name: 'Total Users',
+      value: 2845,
       trend: '+125 this month',
       percentage: 78,
       color: 'blue'
     },
-    { 
-      id: 2, 
-      name: 'Active Hackathons', 
-      value: 12, 
+    {
+      id: 2,
+      name: 'Active Hackathons',
+      value: 12,
       trend: '+3 this month',
       percentage: 65,
       color: 'purple'
     },
-    { 
-      id: 3, 
-      name: 'Submissions', 
-      value: 342, 
+    {
+      id: 3,
+      name: 'Submissions',
+      value: 342,
       trend: '+87 this week',
       percentage: 82,
       color: 'green'
     },
-    { 
-      id: 4, 
-      name: 'Challenge Completions', 
-      value: 1567, 
+    {
+      id: 4,
+      name: 'Challenge Completions',
+      value: 1567,
       trend: '+315 this month',
       percentage: 90,
       color: 'yellow'
@@ -128,16 +129,15 @@ const AdminPanel = ({ user }) => {
           <div key={stat.id} className="bg-gray-800/70 rounded-xl shadow-lg border border-gray-700/50 hover:border-purple-500/30 transition-all duration-300">
             <div className="p-4">
               <div className="flex items-start justify-between mb-3">
-                <div className={`p-2 rounded-lg ${
-                  stat.color === 'blue' ? 'bg-blue-900/50 text-blue-300' : 
-                  stat.color === 'purple' ? 'bg-purple-900/50 text-purple-300' : 
-                  stat.color === 'green' ? 'bg-green-900/50 text-green-300' : 
-                  'bg-yellow-900/50 text-yellow-300'
-                }`}>
+                <div className={`p-2 rounded-lg ${stat.color === 'blue' ? 'bg-blue-900/50 text-blue-300' :
+                    stat.color === 'purple' ? 'bg-purple-900/50 text-purple-300' :
+                      stat.color === 'green' ? 'bg-green-900/50 text-green-300' :
+                        'bg-yellow-900/50 text-yellow-300'
+                  }`}>
                   {stat.color === 'blue' ? <UsersIcon className="w-5 h-5" /> :
-                   stat.color === 'purple' ? <RocketLaunchIcon className="w-5 h-5" /> :
-                   stat.color === 'green' ? <DocumentCheckIcon className="w-5 h-5" /> :
-                   <CodeBracketIcon className="w-5 h-5" />}
+                    stat.color === 'purple' ? <RocketLaunchIcon className="w-5 h-5" /> :
+                      stat.color === 'green' ? <DocumentCheckIcon className="w-5 h-5" /> :
+                        <CodeBracketIcon className="w-5 h-5" />}
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-xs font-semibold text-green-400 bg-green-900/40 px-2 py-1 rounded-full flex items-center">
@@ -152,12 +152,11 @@ const AdminPanel = ({ user }) => {
                 <p className="text-sm font-medium text-gray-400">{stat.name}</p>
                 <p className="text-2xl font-bold text-white my-1">{stat.value}</p>
                 <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
-                  <div className={`h-1.5 rounded-full ${
-                    stat.color === 'blue' ? 'bg-blue-500' : 
-                    stat.color === 'purple' ? 'bg-purple-500' : 
-                    stat.color === 'green' ? 'bg-green-500' : 
-                    'bg-yellow-500'
-                  }`} style={{ width: `${stat.percentage}%` }}></div>
+                  <div className={`h-1.5 rounded-full ${stat.color === 'blue' ? 'bg-blue-500' :
+                      stat.color === 'purple' ? 'bg-purple-500' :
+                        stat.color === 'green' ? 'bg-green-500' :
+                          'bg-yellow-500'
+                    }`} style={{ width: `${stat.percentage}%` }}></div>
                 </div>
               </div>
             </div>
@@ -173,8 +172,8 @@ const AdminPanel = ({ user }) => {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {adminSections.map((section) => (
-            <div 
-              key={section.id} 
+            <div
+              key={section.id}
               className="bg-gray-800/70 rounded-xl shadow-lg border border-gray-700/50 hover:border-purple-500/30 transition-all duration-300 p-4 hover:shadow-purple-900/20 hover:shadow-lg"
             >
               <div className="flex items-start">
@@ -184,8 +183,8 @@ const AdminPanel = ({ user }) => {
                 <div className="flex-1">
                   <h4 className="text-lg font-semibold text-white mb-1">{section.title}</h4>
                   <p className="text-gray-400 text-sm mb-3">{section.description}</p>
-                  <a 
-                    href={section.link} 
+                  <a
+                    href={section.link}
                     className="inline-block text-purple-400 hover:text-purple-300 font-medium text-sm"
                   >
                     Manage →

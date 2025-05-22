@@ -8,6 +8,7 @@ import {
   CheckBadgeIcon
 } from '@heroicons/react/24/outline';
 import { profileAPI } from '../../../../../services/api';
+import { toast } from 'react-hot-toast';
 
 const ResumeTab = ({ profileData, formStyles }) => {
   const [resumeFile, setResumeFile] = useState(null);
@@ -62,18 +63,38 @@ const ResumeTab = ({ profileData, formStyles }) => {
 
     if (resumeFile) {
       try {
+        // Create form data with required fields
+        const formData = new FormData();
+        formData.append('file', resumeFile);
+        formData.append('type', 'resume');
+
+        // Log the form data for debugging
+        console.log('Uploading file:', {
+          name: resumeFile.name,
+          type: resumeFile.type,
+          size: resumeFile.size
+        });
+
+        // Log formData entries
+        for (const pair of formData.entries()) {
+            console.log(pair[0]+ ', ' + pair[1]); 
+        }
+
         // Upload to backend
-        const response = await profileAPI.uploadProfileFile(resumeFile, 'resume');
-        // Update resume data with backend response
+        const response = await profileAPI.uploadProfileFile(formData);
+
+        // Update resume data with S3 response
         setResumeData(prev => ({
           ...prev,
           lastUpdated: new Date().toLocaleDateString(),
-          url: response.data.profile.resume,
+          url: response.data.data.file.filePath, // Use filePath from response
           filename: resumeFile.name
         }));
-        alert('Resume uploaded successfully!');
+
+        toast.success('Resume uploaded successfully!');
       } catch (err) {
-        alert('Failed to upload resume');
+        console.error('Resume upload error:', err);
+        toast.error(err.response?.data?.error || 'Failed to upload resume');
       }
     }
   };

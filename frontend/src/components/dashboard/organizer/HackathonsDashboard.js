@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hackathonAPI } from '../../../services/api';
+import { getImageUrl } from '../../../utils/imageHelper';
 
 // Import components
 import HackathonStatsCards from './hackathons/components/HackathonStatsCards';
+import HackathonFilters from './hackathons/components/HackathonFilters';
 import HackathonTable from './hackathons/components/HackathonTable';
 
 // Import hooks
@@ -13,9 +15,11 @@ const HackathonsManagement = ({ user }) => {
   const navigate = useNavigate();
   const [hackathons, setHackathons] = useState([]);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'card'
+  const [loading, setLoading] = useState(true);
 
   // Fetch hackathons created by the current organizer
   useEffect(() => {
+    setLoading(true);
     hackathonAPI.getMyHackathons(1, 100)
       .then(res => {
         if (res.data && res.data.success) {
@@ -24,8 +28,8 @@ const HackathonsManagement = ({ user }) => {
             ...hackathon,
             id: hackathon._id,
             name: hackathon.title,
-            logo: hackathon.imageFile?.fileUrl,
-            image: hackathon.imageFile?.fileUrl,
+            logo: getImageUrl(hackathon.imagePath),
+            image: getImageUrl(hackathon.imagePath),
             status: hackathon.status === 'approved' ? 'live' : hackathon.status === 'pending' ? 'draft' : hackathon.status,
             stats: {
               participants: hackathon.participants || 0,
@@ -41,9 +45,11 @@ const HackathonsManagement = ({ user }) => {
         } else {
           setHackathons([]);
         }
+        setLoading(false);
       })
       .catch(() => {
         setHackathons([]);
+        setLoading(false);
       });
   }, []);
 

@@ -14,6 +14,9 @@ import RecentlyViewed from './user/RecentlyViewed';
 import UserHackathons from './user/UserHackathons';
 import { HackathonDetail } from './user/hackathon';
 import UserCertificates from './user/UserCertificates';
+import OrganizerVerificationForm from './user/OrganizerVerificationForm';
+import FindTeam from './user/FindTeam';
+import MyTeam from './user/MyTeam';
 
 // Import Organizer Dashboard Components
 import HackathonsManagement from './organizer/HackathonsDashboard';
@@ -26,6 +29,7 @@ import JudgingDashboard from './organizer/JudgingDashboard';
 import OrgHackathonDetail from './organizer/hackathons/OrgHackathonDetail.js';
 import { WalletDashboard } from './organizer/wallet';
 import OrganizerHackathonDetail from './organizer/OrganizerHackathonDetail';
+import TestDetailsDashboard from './organizer/TestDetailsDashboard';
 
 // Import Admin Dashboard Components
 import AdminPanel from './admin/AdminPanel';
@@ -35,6 +39,37 @@ import HackathonManagement from './admin/hackathons/HackathonManagement';
 import ChallengeManagement from './admin/challenges/ChallengeManagement';
 import CreateChallenge from './admin/challenges/CreateChallenge';
 import EditChallenge from './admin/challenges/EditChallenge';
+
+// Clean Layout without sidebar for verification form
+const CleanLayout = ({ children }) => {
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <header className="bg-gray-800 shadow-md py-4">
+        <div className="container mx-auto px-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <a href="/dashboard" className="flex items-center">
+              <img
+                src="/logo.svg"
+                alt="HackathonHub"
+                className="h-8 w-auto mr-3"
+              />
+              <h1 className="text-xl font-bold text-white">HackathonHub</h1>
+            </a>
+          </div>
+          <a
+            href="/dashboard/user"
+            className="text-sm px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+          >
+            Back to Dashboard
+          </a>
+        </div>
+      </header>
+      <main>
+        {children}
+      </main>
+    </div>
+  );
+};
 
 // Verification pending message component
 const VerificationPendingMessage = () => (
@@ -84,11 +119,16 @@ const OrganizerRoute = ({ element, user }) => {
   const isVerifiedOrganizer = user?.role === 'organizer' || user?.role === 'admin';
   const isPendingOrganizer = user?.role === 'pending_organizer';
 
+  console.log('OrganizerRoute - User role:', user?.role);
+  console.log('OrganizerRoute - Is verified:', isVerifiedOrganizer);
+  console.log('OrganizerRoute - Is pending:', isPendingOrganizer);
+
   if (isPendingOrganizer) {
     return <VerificationPendingMessage />;
   }
 
   if (!isVerifiedOrganizer) {
+    console.log('OrganizerRoute - Redirecting to verification');
     return <Navigate to="/dashboard/user/verification" replace />;
   }
 
@@ -137,8 +177,11 @@ const DashboardRouter = () => {
   const isAdminRoute = window.location.pathname.includes('/dashboard/admin');
 
   // Check if user is accessing organizer routes
-  const isOrganizerRoute = window.location.pathname.includes('/organizer') ||
-    window.location.pathname.includes('/dashboard/organizer');
+  const isOrganizerRoute = window.location.pathname.includes('/dashboard/organizer');
+
+  // Check if user is accessing user dashboard routes - exclude myteam from this check
+  const isUserRoute = window.location.pathname.includes('/dashboard/user') &&
+    !window.location.pathname.includes('/dashboard/myteam');
 
   // Enforce role-based access restrictions
   if (isAdminRoute && user.role !== 'admin') {
@@ -148,10 +191,6 @@ const DashboardRouter = () => {
   if (isOrganizerRoute && user.role === 'pending_organizer') {
     console.log('DashboardRouter - Redirecting pending organizer trying to access organizer routes');
     return <Navigate to="/verification" replace />;
-  }
-
-  if (isOrganizerRoute && user.role !== 'organizer' && user.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
   }
 
   // If it's an admin route, use the AdminLayout
@@ -192,14 +231,30 @@ const DashboardRouter = () => {
         <Route path="/" element={<UserDashboard user={user} />} />
         <Route path="/profile" element={<Profile user={user} />} />
         <Route path="/settings" element={<Settings user={user} />} />
+        <Route path="/find-team" element={<FindTeam />} />
+        <Route path="/myteam" element={<MyTeam />} />
 
         {/* Add verification routes - these should never actually render because we intercept above */}
         <Route path="/user/verification" element={<Navigate to="/verification" replace />} />
         <Route path="/dashboard/user/verification" element={<Navigate to="/verification" replace />} />
 
         {/* Organizer Routes - Wrapped with protector component */}
-        <Route path="/organizer/hackathons/:id" element={<OrganizerRoute element={<OrganizerHackathonDetail user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/hackathons" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
         <Route path="/dashboard/organizer/hackathons/:id" element={<OrganizerRoute element={<OrganizerHackathonDetail user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/participants" element={<OrganizerRoute element={<ParticipantsDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/teams" element={<OrganizerRoute element={<TeamsDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/teams/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
+        <Route path="/dashboard/organizer/teams/detail/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
+        <Route path="/dashboard/organizer/teams/formation" element={<OrganizerRoute element={<TeamFormation />} user={user} />} />
+        <Route path="/dashboard/organizer/judging" element={<OrganizerRoute element={<JudgingDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/wallet" element={<OrganizerRoute element={<WalletDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/test-details" element={<OrganizerRoute element={<TestDetailsDashboard user={user} />} user={user} />} />
+
+        {/* Submissions Routes */}
+        <Route path="/dashboard/organizer/submissions" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/submissions/:hackathonId" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
+        <Route path="/dashboard/organizer/submissions/:hackathonId/:roundId" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
 
         {/* Special debug route */}
         <Route path="/orgview/:id" element={<OrganizerRoute element={
@@ -220,30 +275,6 @@ const DashboardRouter = () => {
           />
         ))}
 
-        <Route path="/dashboard/organizer" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/hackathons" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/participants" element={<OrganizerRoute element={<ParticipantsDashboard user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/teams" element={<OrganizerRoute element={<TeamsDashboard user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/teams/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
-        <Route path="/dashboard/organizer/teams/detail/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
-        <Route path="/dashboard/organizer/teams/formation" element={<OrganizerRoute element={<TeamFormation />} user={user} />} />
-        <Route path="/dashboard/organizer/submissions" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/judging" element={<OrganizerRoute element={<JudgingDashboard user={user} />} user={user} />} />
-        <Route path="/dashboard/organizer/wallet" element={<OrganizerRoute element={<WalletDashboard user={user} />} user={user} />} />
-        <Route
-          path="/dashboard/organizer/wallet/transaction/:transactionId"
-          element={<OrganizerRoute element={
-            <WalletDashboard
-              user={user}
-              renderTransactionDetail={true}
-            />
-          } user={user} />}
-        />
-        <Route
-          path="/dashboard/organizer/notifications"
-          element={<OrganizerRoute element={<PlaceholderComponent title="Notifications" />} user={user} />}
-        />
-
         {/* User Dashboard Routes */}
         <Route path="/dashboard/user" element={<UserDashboard user={user} />} />
         <Route path="/dashboard/user/hackathons" element={<UserHackathons user={user} />} />
@@ -252,6 +283,7 @@ const DashboardRouter = () => {
         <Route path="/dashboard/user/watchlist" element={<UserWatchlist user={user} />} />
         <Route path="/dashboard/user/history" element={<RecentlyViewed user={user} />} />
         <Route path="/dashboard/user/certificates" element={<UserCertificates user={user} />} />
+        <Route path="/dashboard/myteam" element={<MyTeam />} />
 
         {/* Hackathon-specific routes */}
         <Route path="/hackathon/:id/participants" element={<OrganizerRoute element={<ParticipantsDashboard user={user} />} user={user} />} />
@@ -265,26 +297,19 @@ const DashboardRouter = () => {
 
         {/* Add alternative routes without /dashboard prefix for compatibility */}
         <Route path="/organizer" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
+        <Route path="/organizer/hackathons" element={<OrganizerRoute element={<HackathonsManagement user={user} />} user={user} />} />
+        <Route path="/organizer/hackathons/:id" element={<OrganizerRoute element={<OrganizerHackathonDetail user={user} />} user={user} />} />
         <Route path="/organizer/participants" element={<OrganizerRoute element={<ParticipantsDashboard user={user} />} user={user} />} />
         <Route path="/organizer/teams" element={<OrganizerRoute element={<TeamsDashboard user={user} />} user={user} />} />
         <Route path="/organizer/teams/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
         <Route path="/organizer/teams/detail/:teamId" element={<OrganizerRoute element={<TeamDetail />} user={user} />} />
-        <Route path="/organizer/submissions" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
+        <Route path="/organizer/teams/formation" element={<OrganizerRoute element={<TeamFormation />} user={user} />} />
         <Route path="/organizer/judging" element={<OrganizerRoute element={<JudgingDashboard user={user} />} user={user} />} />
         <Route path="/organizer/wallet" element={<OrganizerRoute element={<WalletDashboard user={user} />} user={user} />} />
-        <Route
-          path="/organizer/wallet/transaction/:transactionId"
-          element={<OrganizerRoute element={
-            <WalletDashboard
-              user={user}
-              renderTransactionDetail={true}
-            />
-          } user={user} />}
-        />
-        <Route
-          path="/organizer/analytics"
-          element={<OrganizerRoute element={<PlaceholderComponent title="Hackathon Analytics" />} user={user} />}
-        />
+        <Route path="/organizer/test-details" element={<OrganizerRoute element={<TestDetailsDashboard user={user} />} user={user} />} />
+        <Route path="/organizer/submissions" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
+        <Route path="/organizer/submissions/:hackathonId" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
+        <Route path="/organizer/submissions/:hackathonId/:roundId" element={<OrganizerRoute element={<SubmissionsDashboard user={user} />} user={user} />} />
 
         {/* Add alternative user routes without /dashboard prefix for compatibility */}
         <Route path="/user" element={<UserDashboard user={user} />} />
@@ -294,6 +319,7 @@ const DashboardRouter = () => {
         <Route path="/user/watchlist" element={<UserWatchlist user={user} />} />
         <Route path="/user/history" element={<RecentlyViewed user={user} />} />
         <Route path="/user/certificates" element={<UserCertificates user={user} />} />
+        <Route path="/user/myteam" element={<MyTeam />} />
 
         {/* Wallet Dashboard */}
         <Route path="/wallet" element={<OrganizerRoute element={<WalletDashboard user={user} />} user={user} />} />

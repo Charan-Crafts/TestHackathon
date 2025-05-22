@@ -1,17 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { hackathonAPI } from '../../../services/api';
 
 const OrganizerHackathonDetail = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [hackathon, setHackathon] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [statusLoading, setStatusLoading] = useState(false);
     const [isOrganizer, setIsOrganizer] = useState(false);
+
+    // Timeline steps (static for now)
+    const timelineSteps = [
+        { icon: '📝', label: 'Registration and team formation' },
+        { icon: '🧩', label: 'Problem statements revealed' },
+        { icon: '🚀', label: 'Build your prototype' },
+        { icon: '🧑‍💻', label: 'Shortlisting for pitching' },
+    ];
 
     // Remove modal state, use dropdown logic
     const [openRoundIdx, setOpenRoundIdx] = useState(null);
+    const [editingPlatformLink, setEditingPlatformLink] = useState(false);
+    const [platformLinkValue, setPlatformLinkValue] = useState('');
+
+    // Add state for editing submission requirements
+    const [editingSubmissionReqIdx, setEditingSubmissionReqIdx] = useState(null);
+    const [submissionReqValue, setSubmissionReqValue] = useState('');
     const [saveLoading, setSaveLoading] = useState(false);
     const [saveError, setSaveError] = useState(null);
 
@@ -24,25 +38,21 @@ const OrganizerHackathonDetail = () => {
         }
         return () => clearInterval(interval);
     }, [openRoundIdx, timer]);
+    const formatTimer = (secs) => {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = secs % 60;
+        return `${h}h ${m}m ${s}s`;
+    };
 
     // When dropdown opens, set platform link value
     useEffect(() => {
         if (!hackathon || !hackathon.rounds) return;
         if (openRoundIdx !== null && hackathon.rounds[openRoundIdx]) {
-            // Update form data with current round values
-            const round = hackathon.rounds[openRoundIdx];
-            setRoundFormData({
-                name: round.name || '',
-                type: round.type || '',
-                description: round.description || '',
-                startDate: round.startDate ? new Date(round.startDate).toISOString().split('T')[0] : '',
-                endDate: round.endDate ? new Date(round.endDate).toISOString().split('T')[0] : '',
-                startTime: round.startTime || '',
-                endTime: round.endTime || '',
-                platformLink: round.platformLink || '',
-                submissionType: round.submissionType || 'github',
-                evaluationCriteria: round.evaluationCriteria || []
-            });
+            setPlatformLinkValue(hackathon.rounds[openRoundIdx].platformLink || '');
+            setEditingPlatformLink(false);
+            setSubmissionReqValue(hackathon.rounds[openRoundIdx].submissionRequirements || '');
+            setEditingSubmissionReqIdx(null);
         }
     }, [openRoundIdx, hackathon]);
 
@@ -70,19 +80,6 @@ const OrganizerHackathonDetail = () => {
             setIsOrganizer(currentUser && currentUser._id === hackathon.organizerId._id);
         }
     }, [hackathon]);
-
-    // Handler for activate/deactivate
-    const handleToggleStatus = async () => {
-        setStatusLoading(true);
-        try {
-            const newStatus = hackathon.status === 'approved' ? 'pending' : 'approved';
-            await hackathonAPI.updateHackathon(hackathon._id, { status: newStatus });
-            setHackathon({ ...hackathon, status: newStatus });
-        } catch (e) {
-            alert('Failed to update status');
-        }
-        setStatusLoading(false);
-    };
 
     // Helper to fetch latest hackathon data
     const fetchHackathon = async () => {
@@ -150,34 +147,8 @@ const OrganizerHackathonDetail = () => {
                 return;
             }
 
-            // Create update data that preserves round history
-            const updateData = {
-                rounds: hackathon.rounds.map((r, i) => {
-                    if (i === idx) {
-                        return {
-                            ...r,
-                            status: 'active',
-                            previousStatus: r.status,
-                            reactivatedAt: new Date().toISOString(),
-                            // Preserve existing submission data
-                            submissions: r.submissions || [],
-                            // Reset evaluation status but keep history
-                            evaluationStatus: {
-                                current: 'pending',
-                                history: [...(r.evaluationStatus?.history || []), {
-                                    status: 'pending',
-                                    timestamp: new Date().toISOString(),
-                                    reason: 'Round reactivated'
-                                }]
-                            }
-                        };
-                    }
-                    return r;
-                })
-            };
-
-            console.log('Calling API with update data:', updateData);
-            const response = await hackathonAPI.updateHackathon(hackathon._id, updateData);
+            console.log('Calling activateRound API...');
+            const response = await hackathonAPI.activateRound(hackathon._id, roundId);
             console.log('API Response:', response);
 
             if (response.data && response.data.success) {
@@ -203,6 +174,96 @@ const OrganizerHackathonDetail = () => {
     // Helper to check if any round is active
     const hasActiveRound = hackathon && hackathon.rounds ? hackathon.rounds.some(r => r.status === 'active') : false;
 
+    // Save handler for platform link
+    const handleSavePlatformLink = async (idx) => {
+        setSaveLoading(true);
+        setSaveError(null);
+        try {
+            const round = hackathon.rounds[idx];
+            const roundId = round._id || round.id;
+
+            // Debug logging
+            console.log('Current user data:', JSON.parse(localStorage.getItem('user')));
+            console.log('Hackathon data:', hackathon);
+            console.log('Round being updated:', round);
+
+            if (!roundId) {
+                setSaveError('Invalid round data');
+                return;
+            }
+
+            // Create a complete round update with the new platform link
+            const updatedRound = {
+                ...round,
+                platformLink: platformLinkValue
+            };
+
+            // Create the update data with the complete round
+            const updateData = {
+                rounds: hackathon.rounds.map((r, i) => i === idx ? updatedRound : r)
+            };
+
+            // Debug logging
+            console.log('Sending update request with data:', updateData);
+
+            // Update using the general hackathon update endpoint
+            const response = await hackathonAPI.update(hackathon._id, updateData);
+
+            if (response.data && response.data.success) {
+                // Update local state with the new platform link
+                const updatedRounds = hackathon.rounds.map((r, i) => {
+                    if (i === idx) {
+                        return {
+                            ...r,
+                            platformLink: platformLinkValue
+                        };
+                    }
+                    return r;
+                });
+                setHackathon({ ...hackathon, rounds: updatedRounds });
+                setEditingPlatformLink(false);
+            } else {
+                setSaveError(response.data?.message || 'Failed to save platform link');
+            }
+        } catch (e) {
+            console.error('Failed to save platform link:', e);
+            // Enhanced error logging
+            console.error('Error details:', {
+                status: e.response?.status,
+                data: e.response?.data,
+                headers: e.response?.headers,
+                config: e.config
+            });
+
+            if (e.response?.status === 403) {
+                setSaveError('You do not have permission to update this hackathon. Please check your role and permissions.');
+            } else if (e.response?.status === 401) {
+                setSaveError('Session expired. Please login again.');
+            } else {
+                setSaveError(e.response?.data?.message || 'Failed to save platform link');
+            }
+        }
+        setSaveLoading(false);
+    };
+
+    // Save handler for submission requirements
+    const handleSaveSubmissionReq = async (idx) => {
+        setSaveLoading(true);
+        setSaveError(null);
+        try {
+            const updatedRounds = hackathon.rounds.map((r, i) =>
+                i === idx ? { ...r, submissionRequirements: submissionReqValue } : r
+            );
+            await hackathonAPI.update(hackathon._id, { rounds: updatedRounds });
+            setHackathon({ ...hackathon, rounds: updatedRounds });
+            setEditingSubmissionReqIdx(null);
+        } catch (e) {
+            console.error('Failed to save submission requirements:', e, e.response?.data);
+            setSaveError('Failed to save submission requirements');
+        }
+        setSaveLoading(false);
+    };
+
     // Add state for editing round details
     const [editingRoundIdx, setEditingRoundIdx] = useState(null);
     const [roundFormData, setRoundFormData] = useState({
@@ -217,6 +278,26 @@ const OrganizerHackathonDetail = () => {
         submissionType: 'github',
         evaluationCriteria: []
     });
+
+    // When dropdown opens, set round form data
+    useEffect(() => {
+        if (!hackathon || !hackathon.rounds) return;
+        if (openRoundIdx !== null && hackathon.rounds[openRoundIdx]) {
+            const round = hackathon.rounds[openRoundIdx];
+            setRoundFormData({
+                name: round.name || '',
+                type: round.type || '',
+                description: round.description || '',
+                startDate: round.startDate ? new Date(round.startDate).toISOString().split('T')[0] : '',
+                endDate: round.endDate ? new Date(round.endDate).toISOString().split('T')[0] : '',
+                startTime: round.startTime || '',
+                endTime: round.endTime || '',
+                platformLink: round.platformLink || '',
+                submissionType: round.submissionType || 'github',
+                evaluationCriteria: round.evaluationCriteria || []
+            });
+        }
+    }, [openRoundIdx, hackathon]);
 
     // Modify the handleSaveRoundDetails function
     const handleSaveRoundDetails = async (idx) => {
@@ -265,7 +346,7 @@ const OrganizerHackathonDetail = () => {
             console.log('Sending update request with data:', updateData);
 
             // Update using the general hackathon update endpoint
-            const response = await hackathonAPI.updateHackathon(hackathon._id, updateData);
+            const response = await hackathonAPI.update(hackathon._id, updateData);
 
             if (response.data && response.data.success) {
                 // Update local state
@@ -346,7 +427,7 @@ const OrganizerHackathonDetail = () => {
     return (
         <div className="max-w-4xl mx-auto py-8 px-2">
             {/* Main Card */}
-            <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 rounded-xl shadow-lg border border-gray-700/40 p-6 mb-6">
+            <div className="bg-gradient-to-br from-gray-900/80 to-grayimage.png-800/80 rounded-xl shadow-lg border border-gray-700/40 p-6 mb-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-1 flex items-center">
@@ -355,15 +436,7 @@ const OrganizerHackathonDetail = () => {
                         </h2>
                         <p className="text-gray-400">by {hackathon.organizer}</p>
                     </div>
-                    <div className="flex gap-2">
-                        <button
-                            className={`px-4 py-2 rounded-lg font-medium shadow ${hackathon.status === 'approved' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white`}
-                            onClick={handleToggleStatus}
-                            disabled={statusLoading}
-                        >
-                            {hackathon.status === 'approved' ? (statusLoading ? 'Deactivating...' : 'Deactivate') : (statusLoading ? 'Activating...' : 'Activate')}
-                        </button>
-                    </div>
+
                 </div>
                 {/* Quick Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">

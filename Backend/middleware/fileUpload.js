@@ -1,22 +1,10 @@
 const multer = require('multer');
 const path = require('path');
-const { s3, BUCKET_NAME } = require('../config/s3Config');
 const ErrorResponse = require('../utils/errorResponse');
-const multerS3 = require('multer-s3');
+const { uploadToS3 } = require('../config/s3Config');
 
-// Configure storage for uploaded files using S3
-const storage = multerS3({
-    s3: s3,
-    bucket: BUCKET_NAME,
-    acl: 'private',
-    metadata: function (req, file, cb) {
-        cb(null, { fieldName: file.fieldname });
-    },
-    key: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `${uniqueSuffix}-${file.originalname.replace(/\s+/g, '-')}`);
-    }
-});
+// Configure storage to use memory storage instead of disk
+const storage = multer.memoryStorage();
 
 // File filter to validate types
 const fileFilter = (req, file, cb) => {
@@ -32,7 +20,7 @@ const fileFilter = (req, file, cb) => {
     if (extname && mimetype) {
         return cb(null, true);
     } else {
-        cb(new Error('File type not supported! Please upload only images, documents, or archives.'), false);
+        cb(new Error(`File type not supported! File: ${file.originalname}, Type: ${file.mimetype}`), false);
     }
 };
 
@@ -40,38 +28,86 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB file size limit
+        fileSize: 50 * 1024 * 1024, // 50MB file size limit
     },
     fileFilter: fileFilter
 });
 
 // Middleware for single file upload
-exports.uploadSingleFile = (fieldName) => (req, res, next) => {
+exports.uploadSingleFile = (fieldName) => async (req, res, next) => {
+    console.log(`Starting single file upload for field: ${fieldName}`);
+    console.log('Request headers:', req.headers);
+    console.log('Request body:', req.body);
+
     const uploadMiddleware = upload.single(fieldName);
 
-    uploadMiddleware(req, res, (err) => {
+    uploadMiddleware(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
             // A Multer error occurred
+            console.error('Multer error:', {
+                code: err.code,
+                field: err.field,
+                message: err.message
+            });
+
             if (err.code === 'LIMIT_FILE_SIZE') {
-                return next(new ErrorResponse('File size too large. Maximum size is 10MB', 400));
+                return next(new ErrorResponse('File size too large. Maximum size is 50MB', 400));
             }
             return next(new ErrorResponse(`Upload error: ${err.message}`, 400));
         } else if (err) {
             // A non-Multer error occurred
+            console.error('Non-Multer error:', err);
             return next(new ErrorResponse(err.message, 400));
         }
-        // File uploaded successfully
-        next();
+
+        // If no file was uploaded, just continue
+        if (!req.file) {
+            console.log('No file uploaded for field:', fieldName);
+            return next(new ErrorResponse('Please upload a file', 400));
+        }
+
+        try {
+            console.log('File received:', {
+                fieldname: req.file.fieldname,
+                originalname: req.file.originalname,
+                mimetype: req.file.mimetype,
+                size: req.file.size
+            });
+
+            // Upload to S3
+            const s3Result = await uploadToS3(req.file);
+
+            // Add S3 info to the request object
+            req.file.key = s3Result.key;
+            req.file.location = s3Result.location;
+            req.file.bucket = s3Result.bucket;
+
+            console.log('S3 upload successful:', {
+                key: s3Result.key,
+                location: s3Result.location,
+                bucket: s3Result.bucket
+            });
+
+            // Remove buffer from response
+            delete req.file.buffer;
+            next();
+        } catch (error) {
+            console.error('S3 upload error:', {
+                message: error.message,
+                stack: error.stack,
+                details: error
+            });
+            return next(new ErrorResponse('Error uploading to S3: ' + error.message, 500));
+        }
     });
 };
 
 // Middleware for multiple file uploads
-exports.uploadMultipleFiles = (fieldName, maxCount = 5) => (req, res, next) => {
+exports.uploadMultipleFiles = (fieldName, maxCount = 5) => async (req, res, next) => {
     const uploadMiddleware = upload.array(fieldName, maxCount);
 
-    uploadMiddleware(req, res, (err) => {
+    uploadMiddleware(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
-            // A Multer error occurred
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return next(new ErrorResponse('File size too large. Maximum size is 10MB', 400));
             } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
@@ -79,21 +115,38 @@ exports.uploadMultipleFiles = (fieldName, maxCount = 5) => (req, res, next) => {
             }
             return next(new ErrorResponse(`Upload error: ${err.message}`, 400));
         } else if (err) {
-            // A non-Multer error occurred
             return next(new ErrorResponse(err.message, 400));
         }
-        // Files uploaded successfully
-        next();
+
+        try {
+            if (req.files && req.files.length > 0) {
+                // Upload all files to S3
+                const uploadPromises = req.files.map(async (file) => {
+                    const s3Result = await uploadToS3(file);
+                    // Add S3 info to the file object
+                    file.key = s3Result.key;
+                    file.location = s3Result.location;
+                    file.bucket = s3Result.bucket;
+                    // Remove buffer from response
+                    delete file.buffer;
+                    return file;
+                });
+
+                await Promise.all(uploadPromises);
+            }
+            next();
+        } catch (error) {
+            return next(new ErrorResponse('Error uploading to S3: ' + error.message, 500));
+        }
     });
 };
 
 // Middleware for multiple file uploads with different field names
-exports.uploadFields = (fields) => (req, res, next) => {
+exports.uploadFields = (fields) => async (req, res, next) => {
     const uploadMiddleware = upload.fields(fields);
 
-    uploadMiddleware(req, res, (err) => {
+    uploadMiddleware(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
-            // A Multer error occurred
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return next(new ErrorResponse('File size too large. Maximum size is 10MB', 400));
             } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
@@ -101,10 +154,29 @@ exports.uploadFields = (fields) => (req, res, next) => {
             }
             return next(new ErrorResponse(`Upload error: ${err.message}`, 400));
         } else if (err) {
-            // A non-Multer error occurred
             return next(new ErrorResponse(err.message, 400));
         }
-        // Files uploaded successfully
-        next();
+
+        try {
+            // Process each field's files
+            for (const field of Object.keys(req.files || {})) {
+                const files = req.files[field];
+                const uploadPromises = files.map(async (file) => {
+                    const s3Result = await uploadToS3(file);
+                    // Add S3 info to the file object
+                    file.key = s3Result.key;
+                    file.location = s3Result.location;
+                    file.bucket = s3Result.bucket;
+                    // Remove buffer from response
+                    delete file.buffer;
+                    return file;
+                });
+
+                await Promise.all(uploadPromises);
+            }
+            next();
+        } catch (error) {
+            return next(new ErrorResponse('Error uploading to S3: ' + error.message, 500));
+        }
     });
 }; 

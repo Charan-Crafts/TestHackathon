@@ -21,6 +21,10 @@ function DetailsStep({ formData, updateFormData, nextStep, prevStep, isNavigatin
     'Impact', 'Presentation', 'Code Quality', 'Adherence to Theme'
   ];
 
+  const branchOptions = [
+    'CSE', 'ECE', 'EEE', 'ME', 'CE', 'IT', 'AIML', 'DS', 'Other'
+  ];
+
   const defaultRulesTemplate = `1. Eligibility
    - All participants must be registered before the deadline
    - Teams must consist of 1-3 members
@@ -97,6 +101,31 @@ function DetailsStep({ formData, updateFormData, nextStep, prevStep, isNavigatin
 
   const handleTemplateClick = () => {
     updateFormData({ rules: defaultRulesTemplate });
+  };
+
+  const isStudentsOnly = formData.eligibility.includes('Students Only');
+
+  const handleBranchChange = (e) => {
+    const { value, checked } = e.target;
+    let updated = [...(formData.studentBranches || [])];
+    if (checked) {
+      updated.push(value);
+    } else {
+      updated = updated.filter(b => b !== value);
+    }
+    updateFormData({ studentBranches: updated });
+  };
+
+  const handlePercentageChange = (e) => {
+    updateFormData({ studentMinPercentage: e.target.value });
+  };
+
+  const handleTenthMarksChange = (e) => {
+    updateFormData({ tenthMarks: e.target.value });
+  };
+
+  const handleTwelfthMarksChange = (e) => {
+    updateFormData({ twelfthMarks: e.target.value });
   };
 
   const handleSubmit = (e) => {
@@ -179,6 +208,79 @@ function DetailsStep({ formData, updateFormData, nextStep, prevStep, isNavigatin
           ))}
         </div>
       </div>
+
+      {/* Academic Prerequisites */}
+      <div className="mb-8 transition-all duration-300 hover:shadow-md hover:shadow-cyan-500/10 rounded-lg p-3 bg-gray-900/30 border border-cyan-500/20">
+        <label className="block text-lg font-medium text-cyan-300 mb-3">
+          Academic Prerequisites
+        </label>
+        <div className="space-y-4">
+          <div>
+            <span className="block text-gray-400 mb-2">Minimum 10th Standard Marks (%):</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.tenthMarks || ''}
+              onChange={handleTenthMarksChange}
+              className="w-32 px-3 py-2 rounded border border-cyan-500 bg-gray-800 text-white"
+              placeholder="e.g. 75"
+            />
+          </div>
+          <div>
+            <span className="block text-gray-400 mb-2">Minimum 12th Standard Marks (%):</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.twelfthMarks || ''}
+              onChange={handleTwelfthMarksChange}
+              className="w-32 px-3 py-2 rounded border border-cyan-500 bg-gray-800 text-white"
+              placeholder="e.g. 70"
+            />
+          </div>
+        </div>
+      </div>
+
+      {isStudentsOnly && (
+        <div className="mb-8 transition-all duration-300 hover:shadow-md hover:shadow-cyan-500/10 rounded-lg p-3 bg-gray-900/30 border border-cyan-500/20">
+          <label className="block text-lg font-medium text-cyan-300 mb-3">
+            Student Criteria
+          </label>
+          <div className="mb-4">
+            <span className="block text-gray-400 mb-2">Allowed Branches (select all that apply):</span>
+            <div className="flex flex-wrap gap-3">
+              {branchOptions.map(branch => (
+                <label key={branch} className="inline-flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    value={branch}
+                    checked={formData.studentBranches?.includes(branch)}
+                    onChange={handleBranchChange}
+                    className="form-checkbox h-4 w-4 text-cyan-500 rounded border-gray-600"
+                  />
+                  <span className="text-gray-300">{branch}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="block text-gray-400 mb-2">Minimum Percentage/CGPA:</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.studentMinPercentage || ''}
+              onChange={handlePercentageChange}
+              className="w-32 px-3 py-2 rounded border border-cyan-500 bg-gray-800 text-white"
+              placeholder="e.g. 60"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Rules and Requirements */}
       <div className="mb-8 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 rounded-lg p-3">

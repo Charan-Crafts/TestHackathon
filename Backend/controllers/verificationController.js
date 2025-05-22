@@ -55,34 +55,44 @@ exports.uploadVerificationProofs = async (req, res, next) => {
 
         // Create file records for the uploaded files
         const photoIdProof = await File.create({
-            fileName: photoIdProofFile.filename,
+            fileName: photoIdProofFile.key,
             originalName: photoIdProofFile.originalname,
-            filePath: photoIdProofFile.path,
+            filePath: photoIdProofFile.location,
             fileSize: photoIdProofFile.size,
             fileType: photoIdProofFile.mimetype,
             uploadedBy: req.user.id,
             entityType: 'user',
+            entityId: req.user.id,
             isPublic: false,
-            tags: ['id-proof', 'verification']
+            tags: ['id-proof', 'verification'],
+            s3Key: photoIdProofFile.key,
+            s3Bucket: photoIdProofFile.bucket
         });
 
         const organizationIdProof = await File.create({
-            fileName: organizationIdProofFile.filename,
+            fileName: organizationIdProofFile.key,
             originalName: organizationIdProofFile.originalname,
-            filePath: organizationIdProofFile.path,
+            filePath: organizationIdProofFile.location,
             fileSize: organizationIdProofFile.size,
             fileType: organizationIdProofFile.mimetype,
             uploadedBy: req.user.id,
             entityType: 'user',
+            entityId: req.user.id,
             isPublic: false,
-            tags: ['organization-proof', 'verification']
+            tags: ['organization-proof', 'verification'],
+            s3Key: organizationIdProofFile.key,
+            s3Bucket: organizationIdProofFile.bucket
         });
 
         res.status(201).json({
             success: true,
             data: {
                 photoIdProof: photoIdProof._id,
-                organizationIdProof: organizationIdProof._id
+                organizationIdProof: organizationIdProof._id,
+                photoIdProofUrl: photoIdProof.filePath,
+                organizationIdProofUrl: organizationIdProof.filePath,
+                photoIdProofKey: photoIdProof.s3Key,
+                organizationIdProofKey: organizationIdProof.s3Key
             }
         });
     } catch (err) {

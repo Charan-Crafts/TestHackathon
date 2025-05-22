@@ -34,6 +34,9 @@ const TeamsDashboard = ({ user }) => {
   });
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [activeTab, setActiveTab] = useState('teams');
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [showMessageForm, setShowMessageForm] = useState(false);
   
   // Available statuses for bulk actions
   const availableStatuses = [
@@ -150,14 +153,17 @@ const TeamsDashboard = ({ user }) => {
   // Handle messaging a team
   const handleMessageTeam = (id) => {
     setSelectedTeams([id]);
+    setShowMessageForm(true);
   };
 
   // Handle select/deselect all teams
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedTeams(filteredTeams.map(team => team.id));
+      setShowBulkActions(true);
     } else {
       setSelectedTeams([]);
+      setShowBulkActions(false);
     }
   };
 
@@ -166,8 +172,10 @@ const TeamsDashboard = ({ user }) => {
     if (selectedTeams.includes(id)) {
       const newSelected = selectedTeams.filter(teamId => teamId !== id);
       setSelectedTeams(newSelected);
+      setShowBulkActions(newSelected.length > 0);
     } else {
       setSelectedTeams([...selectedTeams, id]);
+      setShowBulkActions(true);
     }
   };
 
@@ -200,6 +208,7 @@ const TeamsDashboard = ({ user }) => {
         
       case 'message':
         setActiveTab('communications');
+        setShowMessageForm(true);
         break;
         
       case 'export':
@@ -211,6 +220,7 @@ const TeamsDashboard = ({ user }) => {
           prevTeams.filter(team => !selectedTeams.includes(team.id))
         );
         setSelectedTeams([]);
+        setShowBulkActions(false);
         break;
         
       default:
@@ -220,6 +230,7 @@ const TeamsDashboard = ({ user }) => {
 
   const handleClearSelection = () => {
     setSelectedTeams([]);
+    setShowBulkActions(false);
   };
 
   const handleSendMessage = (team, messageText, messageType) => {
@@ -228,7 +239,8 @@ const TeamsDashboard = ({ user }) => {
     ).filter(Boolean);
     
     alert(`${messageType} sent to ${teamNames.join(', ')}: ${messageText}`);
-    setSelectedTeams([]);
+    setMessageText('');
+    setShowMessageForm(false);
   };
 
   // Get selected team objects

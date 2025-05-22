@@ -1,17 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { protect } = require('../middleware/auth');
 const registrationController = require('../controllers/registrationController');
 
-// Create a new registration
-router.post('/', registrationController.createRegistration);
-
-// Get all registrations (optionally filter by hackathonId or userId)
-router.get('/', registrationController.getRegistrations);
-
-// Get a single registration by ID
-router.get('/:id', registrationController.getRegistrationById);
-
-// Approve or reject a registration
-router.put('/:id/review', registrationController.reviewRegistration);
+// Registration routes
+router.post('/', protect, registrationController.createRegistration);
+router.get('/', protect, registrationController.getRegistrations);
+router.get('/:id', protect, registrationController.getRegistrationById);
+router.put('/:id/review', protect, registrationController.reviewRegistration);
 
 module.exports = router; 

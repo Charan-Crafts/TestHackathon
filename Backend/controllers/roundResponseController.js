@@ -1,6 +1,7 @@
 const RoundResponse = require('../models/RoundResponse');
 const File = require('../models/File');
 const ErrorResponse = require('../utils/errorResponse');
+const Hackathon = require('../models/Hackathon');
 
 // @desc    Create or update a round response
 // @route   POST /api/round-responses
@@ -8,6 +9,32 @@ const ErrorResponse = require('../utils/errorResponse');
 exports.createOrUpdateResponse = async (req, res) => {
     try {
         const { hackathonId, roundId, responses, teamId } = req.body;
+
+        // Get round details to check for platform link
+        const hackathon = await Hackathon.findOne({ _id: hackathonId });
+        if (!hackathon) {
+            return res.status(404).json({ msg: 'Hackathon not found' });
+        }
+
+        const round = hackathon.rounds.find(r => r._id.toString() === roundId);
+        if (!round) {
+            return res.status(404).json({ msg: 'Round not found' });
+        }
+
+        // Add platform link to responses if it exists
+        let updatedResponses = [...responses];
+        if (round.platformLink) {
+            const platformLinkExists = updatedResponses.some(r => r.fieldType === 'platform_link');
+            if (!platformLinkExists) {
+                updatedResponses.push({
+                    fieldId: `platform-link-${Date.now()}`,
+                    fieldName: 'Platform Link',
+                    fieldType: 'platform_link',
+                    value: round.platformLink,
+                    files: []
+                });
+            }
+        }
 
         // Check if response already exists
         let roundResponse = await RoundResponse.findOne({
@@ -18,7 +45,7 @@ exports.createOrUpdateResponse = async (req, res) => {
 
         if (roundResponse) {
             // Update existing response
-            roundResponse.responses = responses;
+            roundResponse.responses = updatedResponses;
             roundResponse.teamId = teamId;
             roundResponse.status = 'draft';
             await roundResponse.save();
@@ -29,7 +56,7 @@ exports.createOrUpdateResponse = async (req, res) => {
                 roundId,
                 userId: req.user.id,
                 teamId,
-                responses,
+                responses: updatedResponses,
                 status: 'draft'
             });
             await roundResponse.save();

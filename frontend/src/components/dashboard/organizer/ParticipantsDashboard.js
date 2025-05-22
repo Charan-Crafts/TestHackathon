@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { hackathonAPI, registrationAPI } from '../../../services/api';
 import { handleApiError } from '../../../services/api';
+import { getImageUrl } from '../../../utils/imageHelper';
 
 // Import components
 import ParticipantStatsCards from './participants/components/ParticipantStatsCards';
@@ -13,6 +14,15 @@ import '../../../styles/CustomScrollbar.css';
 
 const ParticipantsDashboard = ({ user }) => {
   const navigate = useNavigate();
+  const { id: routeHackathonId } = useParams();
+  const location = useLocation();
+
+  // Parse query parameters to get hackathon ID if it exists
+  const searchParams = new URLSearchParams(location.search);
+  const queryHackathonId = searchParams.get('hackathon');
+
+  // Use either route param or query param for the hackathon ID
+  const hackathonId = routeHackathonId || queryHackathonId;
 
   const [participants, setParticipants] = useState([]);
   const [hackathons, setHackathons] = useState([]);
@@ -69,12 +79,13 @@ const ParticipantsDashboard = ({ user }) => {
           email: reg.personalInfo.email,
           hackathonId: reg.hackathonId._id,
           hackathonName: reg.hackathonId.title,
-          hackathonLogo: reg.hackathonId.image,
+          hackathonLogo: getImageUrl(reg.hackathonId.imagePath),
           registrationDate: reg.createdAt,
           status: reg.status,
           teamId: reg.teamId?._id,
           teamName: reg.teamInfo?.teamName,
-          skills: reg.professionalInfo?.skills || []
+          skills: reg.professionalInfo?.skills || [],
+          profileImage: reg.personalInfo?.profileImage
         }));
 
         setParticipants(transformedParticipants);
@@ -211,11 +222,12 @@ const ParticipantsDashboard = ({ user }) => {
         email: reg.personalInfo.email,
         hackathonId: reg.hackathonId._id,
         hackathonName: reg.hackathonId.title,
-        hackathonLogo: reg.hackathonId.image,
+        hackathonLogo: getImageUrl(reg.hackathonId.imagePath),
         registrationDate: reg.createdAt,
         status: reg.status,
         teamId: reg.teamId?._id,
         teamName: reg.teamInfo?.teamName,
+        skills: reg.professionalInfo?.skills || [],
         skills: reg.professionalInfo?.skills || []
       }));
 
@@ -269,7 +281,7 @@ const ParticipantsDashboard = ({ user }) => {
             >
               <div className="relative h-48">
                 <img
-                  src={hackathon.image}
+                  src={getImageUrl(hackathon.imagePath) || `https://picsum.photos/seed/${hackathon._id}/400/300`}
                   alt={hackathon.title}
                   className="w-full h-full object-cover"
                 />
@@ -487,7 +499,15 @@ const ParticipantsDashboard = ({ user }) => {
                       <td className="px-3 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-9 w-9 rounded-full bg-gray-700 flex items-center justify-center">
-                            <span className="text-sm font-medium text-cyan-300">{participant.name.charAt(0)}</span>
+                            {participant.profileImage ? (
+                              <img
+                                src={getImageUrl(participant.profileImage)}
+                                alt={participant.name}
+                                className="h-9 w-9 rounded-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-sm font-medium text-cyan-300">{participant.name.charAt(0)}</span>
+                            )}
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-white group-hover:text-cyan-400 transition-colors">{participant.name}</div>

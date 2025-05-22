@@ -96,18 +96,26 @@ exports.createOrUpdateProfile = asyncHandler(async (req, res, next) => {
 // @route   POST /api/profiles/upload
 // @access  Private
 exports.uploadProfileFile = asyncHandler(async (req, res, next) => {
+    const { type, name, issuer, description, date } = req.body;
+
+    // If no file was uploaded, return an error
     if (!req.file) {
         return next(new ErrorResponse('Please upload a file', 400));
     }
 
-    const { type, name, issuer, description, date } = req.body;
-    const fileUrl = `/uploads/${req.file.filename}`;
+    console.log('Processing file upload:', {
+        type,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        location: req.file.location
+    });
 
     // Create file record
     const file = await File.create({
-        fileName: req.file.filename,
+        fileName: req.file.originalname,
         originalName: req.file.originalname,
-        filePath: fileUrl,
+        filePath: req.file.location,
         fileSize: req.file.size,
         fileType: req.file.mimetype,
         uploadedBy: req.user.id
@@ -121,14 +129,14 @@ exports.uploadProfileFile = asyncHandler(async (req, res, next) => {
 
     switch (type) {
         case 'resume':
-            profile.resume = fileUrl;
+            profile.resume = req.file.location;
             break;
         case 'certification':
             profile.certifications.push({
                 name,
                 issuer,
                 date,
-                file: fileUrl
+                file: req.file.location
             });
             break;
         case 'achievement':
@@ -136,7 +144,7 @@ exports.uploadProfileFile = asyncHandler(async (req, res, next) => {
                 name,
                 description,
                 date,
-                file: fileUrl
+                file: req.file.location
             });
             break;
         default:

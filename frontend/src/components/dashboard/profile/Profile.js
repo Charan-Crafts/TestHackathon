@@ -143,22 +143,41 @@ const Profile = ({ user }) => {
   // Handle file upload
   const handleFileUpload = async (file, type, metadata) => {
     try {
-      const response = await profileAPI.uploadProfileFile(file, type, metadata);
-      // Update the relevant section based on file type
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+      formData.append('entityType', 'user');
+
+      // Add any additional metadata
+      if (metadata) {
+        Object.keys(metadata).forEach(key => {
+          formData.append(key, metadata[key]);
+        });
+      }
+
+      const response = await profileAPI.uploadProfileFile(formData);
+
+      // Update the relevant section based on file type and S3 response
       if (type === 'resume') {
         setProfileData(prev => ({
           ...prev,
-          resume: response.data.file.path
+          resume: response.data.data.file.location // Use S3 location
         }));
       } else if (type === 'certification') {
         setProfileData(prev => ({
           ...prev,
-          certifications: [...prev.certifications, response.data]
+          certifications: [...prev.certifications, {
+            ...response.data.data,
+            fileUrl: response.data.data.file.location // Use S3 location
+          }]
         }));
       } else if (type === 'achievement') {
         setProfileData(prev => ({
           ...prev,
-          achievements: [...prev.achievements, response.data]
+          achievements: [...prev.achievements, {
+            ...response.data.data,
+            fileUrl: response.data.data.file.location // Use S3 location
+          }]
         }));
       }
     } catch (err) {

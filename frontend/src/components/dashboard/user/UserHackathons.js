@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PlusIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
-import { getApprovedHackathons } from '../../../services/api';
-import { registrationAPI } from '../../../services/api';
+import { getApprovedHackathons, registrationAPI, teamAPI, hackathonAPI } from '../../../services/api';
+import { getImageUrl } from '../../../utils/imageHelper';
+import { toast } from 'react-hot-toast';
 
 function UserHackathons({ user }) {
   const [activeTab, setActiveTab] = useState('active');
   const [hackathons, setHackathons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userRegistrations, setUserRegistrations] = useState([]);
+  const [teamRoles, setTeamRoles] = useState({});
   const [stats, setStats] = useState({
     active: 0,
     upcoming: 0,
@@ -17,18 +19,51 @@ function UserHackathons({ user }) {
     topRanking: null
   });
 
-  // Fetch hackathons
+  // Update checkTeamRole to use API and add error handling
+  const checkTeamRole = async (hackathonId) => {
+    try {
+      const response = await teamAPI.checkTeamRole(hackathonId);
+      if (response.data && response.data.success) {
+        setTeamRoles(prev => ({
+          ...prev,
+          [hackathonId]: response.data.data
+        }));
+      } else {
+        throw new Error(response.data.message || 'Failed to check team role');
+      }
+    } catch (error) {
+      console.error(`Error checking team role for hackathon ${hackathonId}:`, error);
+      toast.error('Failed to check team status');
+      setTeamRoles(prev => ({
+        ...prev,
+        [hackathonId]: {
+          status: 'ERROR',
+          message: 'Error checking team status',
+          isRegistered: false,
+          isTeamLeader: false,
+          isTeamMember: false
+        }
+      }));
+    }
+  };
+
+  // Update fetch hackathons to use API and add error handling
   useEffect(() => {
     setLoading(true);
     getApprovedHackathons()
       .then(res => {
-        const fetchedHackathons = res.data && res.data.data ? res.data.data : [];
+        if (!res.data || !res.data.success) {
+          throw new Error(res.data?.message || 'Failed to fetch hackathons');
+        }
+
+        const fetchedHackathons = res.data.data || [];
         // Map 'approved' to 'active' for display
         const mapped = fetchedHackathons.map(h => ({
           ...h,
           status: h.status === 'approved' ? 'active' : h.status
         }));
         setHackathons(mapped);
+
         // Calculate stats
         const active = mapped.filter(h => h.status === 'active').length;
         const upcoming = mapped.filter(h => h.status === 'upcoming').length;
@@ -55,24 +90,41 @@ function UserHackathons({ user }) {
           totalPrize,
           topRanking
         });
-        setLoading(false);
+
+        // Check team roles for each hackathon
+        mapped.forEach(hackathon => {
+          const hackathonId = hackathon._id || hackathon.id;
+          if (hackathonId) {
+            checkTeamRole(hackathonId);
+          }
+        });
       })
       .catch(err => {
+        console.error('Error fetching hackathons:', err);
+        toast.error(err.message || 'Failed to load hackathons');
         setHackathons([]);
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, []);
 
-  // Fetch user registrations
+  // Update fetch user registrations to use API and add error handling
   useEffect(() => {
     if (user && user._id) {
       registrationAPI.getRegistrations({ userId: user._id })
         .then(res => {
           if (res.data && res.data.success) {
             setUserRegistrations(res.data.data);
+          } else {
+            throw new Error(res.data?.message || 'Failed to fetch registrations');
           }
         })
-        .catch(() => setUserRegistrations([]));
+        .catch(err => {
+          console.error('Error fetching registrations:', err);
+          toast.error('Failed to load registrations');
+          setUserRegistrations([]);
+        });
     }
   }, [user]);
 
@@ -99,6 +151,32 @@ function UserHackathons({ user }) {
       case 'upcoming': return 'brand';
       case 'completed': return 'orange';
       default: return 'gray';
+    }
+  };
+
+  // Update brochure URL construction and handling
+  const getBrochureUrl = (brochurePath) => {
+    if (!brochurePath) return null;
+    return brochurePath.startsWith('/uploads/')
+      ? `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${brochurePath}`
+      : brochurePath;
+  };
+
+  const handleBrochureClick = (e, brochurePath) => {
+    e.preventDefault();
+    const url = getBrochureUrl(brochurePath);
+    if (url) {
+      try {
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          toast.error('Failed to open brochure. Please try again later.');
+        }
+      } catch (error) {
+        console.error('Error opening brochure:', error);
+        toast.error('Failed to open brochure. Please try again later.');
+      }
+    } else {
+      toast.error('No brochure available.');
     }
   };
 
@@ -315,16 +393,20 @@ function UserHackathons({ user }) {
         // Hackathon cards grid
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredHackathons.map((hackathon) => {
-            const isRegistered = registeredHackathonIds.has(hackathon.id) || registeredHackathonIds.has(hackathon._id);
+            const hackathonId = hackathon._id || hackathon.id;
+            const isRegistered = registeredHackathonIds.has(hackathonId);
+            const teamRole = teamRoles[hackathonId];
+            const hasAccess = isRegistered || (teamRole && teamRole.isTeamMember);
+
             return (
               <div
-                key={hackathon.id}
+                key={hackathonId}
                 className={`bg-gradient-to-br from-${getStatusColor(hackathon.status)}-900/30 to-${getStatusColor(hackathon.status)}-800/20 backdrop-blur-sm rounded-lg border border-${getStatusColor(hackathon.status)}-700/30 hover:border-${getStatusColor(hackathon.status)}-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-${getStatusColor(hackathon.status)}-900/20 overflow-hidden`}
               >
                 {/* Banner and header info */}
                 <div className="h-24 relative">
                   <img
-                    src={hackathon.banner}
+                    src={getImageUrl(hackathon.imagePath) || `https://picsum.photos/seed/${hackathon._id}/400/300`}
                     alt=""
                     className="w-full h-full object-cover"
                   />
@@ -333,7 +415,7 @@ function UserHackathons({ user }) {
                   {/* Organizer logo */}
                   <div className="absolute top-2.5 left-2.5 w-6 h-6 rounded-full bg-white p-0.5 shadow-sm">
                     <img
-                      src={hackathon.organizerLogo}
+                      src={getImageUrl(hackathon.organizerLogo) || `https://picsum.photos/seed/${hackathon._id}-org/100/100`}
                       alt=""
                       className="w-full h-full rounded-full"
                     />
@@ -425,14 +507,31 @@ function UserHackathons({ user }) {
 
                   {/* Action button */}
                   <Link
-                    to={isRegistered ? `/dashboard/user/hackathons/${hackathon.id}` : `/registration/${hackathon.id}`}
+                    to={hasAccess ? `/dashboard/user/hackathons/${hackathon.id}` : `/registration/${hackathon.id}`}
                     className={`block w-full text-center text-xs font-medium py-1.5 px-3 rounded transition-colors
                       bg-${getStatusColor(hackathon.status)}-900/60 text-${getStatusColor(hackathon.status)}-300 
                       hover:bg-${getStatusColor(hackathon.status)}-800/60
                     `}
                   >
-                    {isRegistered ? 'Continue Project' : 'Register Now'}
+                    {hasAccess ? (
+                      teamRole?.isTeamMember ? 'View Team Project' : 'Continue Project'
+                    ) : 'Register Now'}
                   </Link>
+
+                  {/* View Brochure Button */}
+                  {hackathon.brochurePath && (
+                    <a
+                      href={getBrochureUrl(hackathon.brochurePath)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => handleBrochureClick(e, hackathon.brochurePath)}
+                      className={`mt-2 block w-full text-center text-xs font-medium py-1.5 px-3 rounded transition-colors
+                        bg-blue-900/60 text-blue-300 hover:bg-blue-800/60
+                      `}
+                    >
+                      View Brochure
+                    </a>
+                  )}
                 </div>
               </div>
             );

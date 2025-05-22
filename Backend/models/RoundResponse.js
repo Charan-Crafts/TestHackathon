@@ -34,7 +34,7 @@ const RoundResponseSchema = new mongoose.Schema({
         fieldType: {
             type: String,
             required: [true, 'Field type is required'],
-            enum: ['text', 'paragraph', 'multiple_choice', 'checkbox', 'dropdown', 'file', 'date', 'time']
+            enum: ['text', 'paragraph', 'multiple_choice', 'checkbox', 'dropdown', 'file', 'date', 'time', 'platform_link']
         },
         value: {
             type: mongoose.Schema.Types.Mixed, // Can store any type of value

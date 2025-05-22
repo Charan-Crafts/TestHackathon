@@ -5,6 +5,7 @@ import Layout from './components/layout/Layout';
 import DashboardRouter from './components/dashboard/DashboardRouter';
 import OrganizerVerificationForm from './components/dashboard/user/OrganizerVerificationForm';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import AssessmentDetails from './components/assessment/AssessmentDetails';
 import VerificationPending from './components/dashboard/user/VerificationPending';
 import TestDetailsDashboard from './components/dashboard/organizer/TestDetailsDashboard';
@@ -367,7 +368,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

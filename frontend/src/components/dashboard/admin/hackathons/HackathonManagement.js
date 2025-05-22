@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { RocketLaunchIcon, CheckCircleIcon, XCircleIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { RocketLaunchIcon, PencilIcon, TrashIcon, EyeIcon, CheckCircleIcon, XCircleIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
+import { hackathonAPI } from '../../../../services/api';
+import API from '../../../../services/api';
 
 const HackathonManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,31 +12,18 @@ const HackathonManagement = () => {
   const [hackathons, setHackathons] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Move fetchHackathons outside useEffect so it can be called from anywhere
+  // Update fetchHackathons to use API
   const fetchHackathons = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/hackathons', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Fetched hackathons:', data.data); // Debug log
-      if (data.success) {
+      const response = await hackathonAPI.getAll();
+      console.log('Fetched hackathons:', response.data.data); // Debug log
+      if (response.data.success) {
         // Map backend fields to frontend expected fields
-        const mapped = data.data.map(hackathon => ({
+        const mapped = response.data.data.map(hackathon => ({
           ...hackathon,
-          approved: hackathon.approvalStatus === 'approved',
+          approved: hackathon.approvalStatus === 'approved' || hackathon.status === 'approved',
           status: (
-            hackathon.status === 'active' ? 'active' :
+            hackathon.status === 'active' || hackathon.status === 'approved' ? 'active' :
               hackathon.status === 'upcoming' ? 'upcoming' :
                 hackathon.status === 'completed' ? 'completed' :
                   hackathon.status === 'Coming Soon' ? 'upcoming' :
@@ -46,7 +35,7 @@ const HackathonManagement = () => {
         }));
         setHackathons(mapped);
       } else {
-        toast.error(data.message || 'Failed to fetch hackathons');
+        toast.error(response.data.message || 'Failed to fetch hackathons');
       }
     } catch (error) {
       console.error('Error fetching hackathons:', error);
@@ -343,43 +332,39 @@ const HackathonDetailsModal = ({ isOpen, onClose, hackathon, updateHackathonStat
     setShowConfirmModal(true);
   };
 
-  // Confirm status change
+  // Update confirmStatusChange to use API
   const confirmStatusChange = async () => {
     setIsLoading(true);
     try {
-      let body = { status: actionType === 'approve' ? 'approved' : 'rejected' };
+      let reviewData = { status: actionType === 'approve' ? 'approved' : 'rejected' };
       if (actionType === 'reject') {
         if (!rejectionReason) {
           toast.error('Please provide a rejection reason.');
           setIsLoading(false);
           return;
         }
-        body.rejectionReason = rejectionReason;
+        reviewData.rejectionReason = rejectionReason;
       }
-      const response = await fetch(`http://localhost:5000/api/hackathons/${hackathon._id}/review`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(body),
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.success) {
+
+      const response = await hackathonAPI.reviewHackathon(hackathon._id, reviewData);
+      
+      if (response.data.success) {
         toast.success(`Hackathon ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`);
         setShowConfirmModal(false);
         setRejectionReason('');
         // Refresh hackathon list in parent
-        if (updateHackathonStatus) updateHackathonStatus(hackathon._id, actionType === 'approve' ? 'active' : 'upcoming', actionType === 'approve' ? 'approved' : 'rejected');
+        if (updateHackathonStatus) {
+          updateHackathonStatus(
+            hackathon._id, 
+            actionType === 'approve' ? 'active' : 'upcoming', 
+            actionType === 'approve' ? 'approved' : 'rejected'
+          );
+        }
         setTimeout(() => {
           onClose();
         }, 500);
       } else {
-        toast.error(data.message || 'Failed to update status');
+        toast.error(response.data.message || 'Failed to update status');
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -390,6 +375,32 @@ const HackathonDetailsModal = ({ isOpen, onClose, hackathon, updateHackathonStat
   };
 
   if (!isOpen) return null;
+
+  // Update brochure URL construction
+  const brochureUrl = hackathon.brochurePath
+    ? hackathon.brochurePath.startsWith('/uploads/')
+      ? `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${hackathon.brochurePath}`
+      : hackathon.brochurePath // Assume it's an external URL if not starting with /uploads/
+    : '#';
+
+  // Update handleBrochureClick with error handling
+  const handleBrochureClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (brochureUrl && brochureUrl !== '#') {
+      try {
+        const newWindow = window.open(brochureUrl, '_blank');
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          toast.error('Failed to open brochure. Please try again later.');
+        }
+      } catch (error) {
+        console.error('Error opening brochure:', error);
+        toast.error('Failed to open brochure. Please try again later.');
+      }
+    } else {
+      toast.error('No brochure available.');
+    }
+  };
 
   return (
     <>
@@ -506,6 +517,21 @@ const HackathonDetailsModal = ({ isOpen, onClose, hackathon, updateHackathonStat
                     <p className="text-sm text-purple-400">Format</p>
                     <p className="text-white capitalize">{hackathon.locationType || 'Not specified'}</p>
                   </div>
+                  {/* View Brochure Button */}
+                  {hackathon.brochurePath && (hackathon.brochurePath.startsWith('/uploads') || hackathon.brochurePath.startsWith('http')) && (
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-purple-400 mb-2">Brochure</p>
+                      <a
+                        href={brochureUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={handleBrochureClick}
+                        className="text-blue-500 hover:underline mr-2"
+                      >
+                        View Brochure
+                      </a>
+                    </div>
+                  )}
                 </div>
                 {(hackathon.locationType === 'offline' || hackathon.locationType === 'hybrid') && (
                   <div>
@@ -749,4 +775,4 @@ const HackathonDetailsModal = ({ isOpen, onClose, hackathon, updateHackathonStat
   );
 };
 
-export default HackathonManagement; 
+export default HackathonManagement;

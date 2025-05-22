@@ -1,6 +1,6 @@
 const ErrorResponse = require('../utils/errorResponse');
-const { s3, BUCKET_NAME } = require('../config/s3Config');
 const File = require('../models/File');
+const { deleteFromS3, getSignedUrl } = require('../config/s3Config');
 
 // @desc    Upload a single file
 // @route   POST /api/files/upload
@@ -13,17 +13,18 @@ exports.uploadFile = async (req, res, next) => {
 
         // Create a new file record
         const file = await File.create({
-            fileName: req.file.key,
+            fileName: req.file.key, // Using S3 key instead of filename
             originalName: req.file.originalname,
-            filePath: req.file.key,
-            fileUrl: req.file.location,
+            filePath: req.file.location, // Using S3 URL instead of local path
             fileSize: req.file.size,
             fileType: req.file.mimetype,
             uploadedBy: req.user.id,
             entityType: req.body.entityType || 'other',
             entityId: req.body.entityId,
             isPublic: req.body.isPublic === 'true' || req.body.isPublic === true,
-            tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : []
+            tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+            s3Key: req.file.key,
+            s3Bucket: req.file.bucket
         });
 
         res.status(201).json({
@@ -48,17 +49,18 @@ exports.uploadMultipleFiles = async (req, res, next) => {
         // Create file records for each uploaded file
         const filePromises = req.files.map(file => {
             return File.create({
-                fileName: file.key,
+                fileName: file.key, // Using S3 key instead of filename
                 originalName: file.originalname,
-                filePath: file.key,
-                fileUrl: file.location,
+                filePath: file.location, // Using S3 URL instead of local path
                 fileSize: file.size,
                 fileType: file.mimetype,
                 uploadedBy: req.user.id,
                 entityType: req.body.entityType || 'other',
                 entityId: req.body.entityId,
                 isPublic: req.body.isPublic === 'true' || req.body.isPublic === true,
-                tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : []
+                tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+                s3Key: file.key,
+                s3Bucket: file.bucket
             });
         });
 
@@ -94,15 +96,16 @@ exports.getFile = async (req, res, next) => {
             return next(new ErrorResponse('Not authorized to access this file', 403));
         }
 
-        // Generate a signed URL for the file that expires in 1 hour
-        const signedUrl = s3.getSignedUrl('getObject', {
-            Bucket: BUCKET_NAME,
-            Key: file.filePath,
-            Expires: 3600 // URL expires in 1 hour
-        });
+        // Generate a signed URL for temporary access
+        const signedUrl = await getSignedUrl(file.s3Key);
 
-        // Redirect to the signed URL
-        res.redirect(signedUrl);
+        res.json({
+            success: true,
+            data: {
+                ...file.toObject(),
+                signedUrl
+            }
+        });
     } catch (err) {
         console.error('Get file error:', err);
         next(err);
@@ -124,11 +127,7 @@ exports.getFilesByEntity = async (req, res, next) => {
 
         // Generate signed URLs for all files
         const filesWithUrls = await Promise.all(files.map(async (file) => {
-            const signedUrl = s3.getSignedUrl('getObject', {
-                Bucket: BUCKET_NAME,
-                Key: file.filePath,
-                Expires: 3600 // URL expires in 1 hour
-            });
+            const signedUrl = await getSignedUrl(file.s3Key);
             return {
                 ...file.toObject(),
                 signedUrl
@@ -163,10 +162,7 @@ exports.deleteFile = async (req, res, next) => {
         }
 
         // Delete from S3
-        await s3.deleteObject({
-            Bucket: BUCKET_NAME,
-            Key: file.filePath
-        }).promise();
+        await deleteFromS3(file.s3Key);
 
         // Delete the database record
         await file.remove();
@@ -192,11 +188,6 @@ exports.uploadProfileImage = async (req, res, next) => {
 
         // Validate that it's an image
         if (!req.file.mimetype.startsWith('image')) {
-            // Delete from S3
-            await s3.deleteObject({
-                Bucket: BUCKET_NAME,
-                Key: req.file.key
-            }).promise();
             return next(new ErrorResponse('Please upload an image file', 400));
         }
 
@@ -204,16 +195,22 @@ exports.uploadProfileImage = async (req, res, next) => {
         const file = await File.create({
             fileName: req.file.key,
             originalName: req.file.originalname,
-            filePath: req.file.key,
-            fileUrl: req.file.location,
+            filePath: req.file.location,
             fileSize: req.file.size,
             fileType: req.file.mimetype,
             uploadedBy: req.user.id,
             entityType: 'user',
             entityId: req.user.id,
             isPublic: true,
-            tags: ['profile', 'image']
+            tags: ['profile', 'image'],
+            s3Key: req.file.key,
+            s3Bucket: req.file.bucket
         });
+
+        // Here you would typically update the user's profile with the new image URL
+        // For example: 
+        // const User = require('../models/User');
+        // await User.findByIdAndUpdate(req.user.id, { profileImage: file.filePath });
 
         res.status(201).json({
             success: true,
@@ -225,7 +222,7 @@ exports.uploadProfileImage = async (req, res, next) => {
     }
 };
 
-// @desc    Upload documents for a specific entity (e.g., hackathon submission)
+// @desc    Upload documents for a specific entity
 // @route   POST /api/files/documents/:entityType/:entityId
 // @access  Private
 exports.uploadEntityDocuments = async (req, res, next) => {
@@ -241,15 +238,16 @@ exports.uploadEntityDocuments = async (req, res, next) => {
             return File.create({
                 fileName: file.key,
                 originalName: file.originalname,
-                filePath: file.key,
-                fileUrl: file.location,
+                filePath: file.location,
                 fileSize: file.size,
                 fileType: file.mimetype,
                 uploadedBy: req.user.id,
                 entityType,
                 entityId,
                 isPublic: req.body.isPublic === 'true' || req.body.isPublic === true,
-                tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : []
+                tags: req.body.tags ? req.body.tags.split(',').map(tag => tag.trim()) : [],
+                s3Key: file.key,
+                s3Bucket: file.bucket
             });
         });
 
@@ -277,17 +275,15 @@ exports.getFileById = async (req, res, next) => {
         }
 
         // Generate a signed URL if the file exists
-        const signedUrl = s3.getSignedUrl('getObject', {
-            Bucket: BUCKET_NAME,
-            Key: file.filePath,
+        const signedUrl = await getSignedUrl(file.s3Key);
+
+        res.json({
+            success: true,
+            data: {
+                ...file.toObject(),
+                signedUrl
+            }
         });
-
-        const fileData = {
-            ...file.toObject(),
-            signedUrl
-        };
-
-        res.json({ success: true, data: fileData });
     } catch (err) {
         next(err);
     }

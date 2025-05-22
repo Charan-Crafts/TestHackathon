@@ -17,7 +17,7 @@ const {
 
 // Import middleware
 const { protect, authorize } = require('../middleware/auth');
-const { uploadSingleFile } = require('../middleware/fileUpload');
+const { uploadSingleFile, uploadFields } = require('../middleware/fileUpload');
 
 const router = express.Router();
 
@@ -26,9 +26,28 @@ router.get('/', getHackathons);
 router.get('/:id', getHackathon);
 
 // Organizer routes
-router.post('/', protect, authorize('organizer', 'admin'), uploadSingleFile('image'), createHackathon);
-router.put('/:id', protect, authorize('organizer', 'admin'), updateHackathon);
+router.post('/',
+    protect,
+    authorize('organizer', 'admin'),
+    uploadFields([
+        { name: 'image', maxCount: 1 },
+        { name: 'brochure', maxCount: 1 }
+    ]),
+    createHackathon
+);
+
+router.put('/:id',
+    protect,
+    authorize('organizer', 'admin'),
+    uploadFields([
+        { name: 'image', maxCount: 1 },
+        { name: 'brochure', maxCount: 1 }
+    ]),
+    updateHackathon
+);
+
 router.delete('/:id', protect, authorize('organizer', 'admin'), deleteHackathon);
+
 router.post(
     '/:id/upload-image',
     protect,
@@ -36,6 +55,7 @@ router.post(
     uploadSingleFile('image'),
     uploadHackathonImage
 );
+
 router.get('/organizer/my-hackathons', protect, authorize('organizer', 'admin'), getMyHackathons);
 router.put('/:id/review', protect, authorize('admin'), reviewHackathon);
 router.put('/:id/rounds/:roundId/activate', protect, authorize('organizer', 'admin'), activateRound);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { roundResponseAPI, submissionAPI } from '../../../../../services/api';
 import API from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 
 const JudgingPanel = ({ submission, onJudge, onCancel }) => {
   const navigate = useNavigate();
@@ -43,21 +44,23 @@ const JudgingPanel = ({ submission, onJudge, onCancel }) => {
   }, [submission?.id]);
 
   useEffect(() => {
-    // Find all file IDs in all file fields
     const fileIds = [];
     submission.responses?.forEach(field => {
       if (field.fieldType === 'file' && Array.isArray(field.files)) {
         field.files.forEach(id => fileIds.push(id));
       }
     });
-    // Remove duplicates
     const uniqueIds = [...new Set(fileIds)];
     if (uniqueIds.length === 0) return;
 
-    // Fetch metadata for each file
     Promise.all(
       uniqueIds.map(id =>
-        API.get(`/files/id/${id}`).then(res => ({ id, data: res.data.data })).catch(() => null)
+        API.get(`/files/id/${id}`)
+          .then(res => ({ id, data: res.data.data }))
+          .catch(error => {
+            console.error(`Error fetching file metadata for ${id}:`, error);
+            return null;
+          })
       )
     ).then(results => {
       const meta = {};
@@ -108,23 +111,46 @@ const JudgingPanel = ({ submission, onJudge, onCancel }) => {
     }
   };
 
+  const getFileUrl = (fileName) => {
+    return `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/files/${fileName}`;
+  };
+
   const handleViewSubmission = async () => {
     try {
-      console.log('Fetching submission details...');
+      setIsViewLoading(true);
+      const platformLinkField = submission.responses?.find(
+        field => field.fieldType === 'platform_link'
+      );
+      if (platformLinkField?.value) {
+        const testId = platformLinkField.value.split('/').pop();
+        console.log('Fetching test data for ID:', testId);
 
-      // Fetch data from the external API
-      const response = await fetch('https://testapi.nexterchat.com/api/submissions/test/uuid/e0f02bce-e01f-4136-b1e9-531a752b7150');
-      const data = await response.json();
+        const response = await fetch(`https://testapi.nexterchat.com/api/submissions/test/uuid/${testId}`);
+        const data = await response.json();
+        console.log('Received test data:', data);
 
-      console.log('API Response:', data);
-
-      // Navigate to test details with the actual API data
-      navigate('/dashboard/organizer/test-details', {
-        state: data
-      });
+        if (data) {
+          const testData = {
+            testId,
+            submissionId: submission.id,
+            projectName: submission.projectName,
+            ...data
+          };
+          console.log('Navigating with test data:', testData);
+          navigate('/dashboard/organizer/test-details', {
+            state: { testData }
+          });
+        } else {
+          toast.error('No test data found');
+        }
+      } else {
+        toast.error('No platform link found in submission');
+      }
     } catch (error) {
-      console.error('Error fetching submission details:', error);
-      setError('Failed to fetch submission details');
+      console.error('Error fetching test details:', error);
+      toast.error('Failed to fetch test details');
+    } finally {
+      setIsViewLoading(false);
     }
   };
 
@@ -164,29 +190,31 @@ const JudgingPanel = ({ submission, onJudge, onCancel }) => {
         <div className="mb-6">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-md font-semibold text-gray-200">Submission Details</h3>
-            <span
-              onClick={handleViewSubmission}
-              className={`text-sm text-cyan-400 hover:text-cyan-300 cursor-pointer transition-colors duration-200 flex items-center ${isViewLoading ? 'opacity-50' : ''}`}
-              style={{ pointerEvents: isViewLoading ? 'none' : 'auto' }}
-            >
-              {isViewLoading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  View Submission
-                </>
-              )}
-            </span>
+            {submission.responses?.some(field => field.fieldType === 'platform_link') && (
+              <button
+                onClick={handleViewSubmission}
+                disabled={isViewLoading}
+                className={`text-sm text-cyan-400 hover:text-cyan-300 cursor-pointer transition-colors duration-200 flex items-center ${isViewLoading ? 'opacity-50' : ''}`}
+              >
+                {isViewLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View Submission
+                  </>
+                )}
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {submission.responses && submission.responses.map((field) => (
@@ -198,10 +226,22 @@ const JudgingPanel = ({ submission, onJudge, onCancel }) => {
                       fileMeta[fileId] ? (
                         <div key={fileId}>
                           <a
-                            href={`http://localhost:5000/api/files/${fileMeta[fileId].fileName}`}
+                            href={getFileUrl(fileMeta[fileId].fileName)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-cyan-400 underline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              try {
+                                const newWindow = window.open(getFileUrl(fileMeta[fileId].fileName), '_blank');
+                                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                                  toast.error('Failed to open file. Please try again later.');
+                                }
+                              } catch (error) {
+                                console.error('Error opening file:', error);
+                                toast.error('Failed to open file. Please try again later.');
+                              }
+                            }}
                           >
                             {fileMeta[fileId].originalName}
                           </a>
@@ -219,9 +259,15 @@ const JudgingPanel = ({ submission, onJudge, onCancel }) => {
                         className="text-cyan-400 underline"
                         onClick={(e) => {
                           e.preventDefault();
-                          const testId = field.value.split('/').pop();
-                          console.log('Test ID:', testId);
-                          window.open(field.value, '_blank');
+                          try {
+                            const newWindow = window.open(field.value, '_blank');
+                            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                              toast.error('Failed to open platform link. Please try again later.');
+                            }
+                          } catch (error) {
+                            console.error('Error opening platform link:', error);
+                            toast.error('Failed to open platform link. Please try again later.');
+                          }
                         }}
                       >
                         Access Platform

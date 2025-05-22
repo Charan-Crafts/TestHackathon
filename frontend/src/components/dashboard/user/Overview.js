@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BottomNav from '../../common/BottomNav';
 import BottomNavStyles from '../../common/BottomNavStyles';
-import { getApprovedHackathons, registrationAPI } from '../../../services/api';
+import { getApprovedHackathons, registrationAPI, teamAPI } from '../../../services/api';
 
 // Add Font Awesome CSS and Custom Styles
 const CustomStyles = () => {
@@ -58,75 +58,113 @@ const UserDashboard = ({ user }) => {
   // Use the passed user data if available, otherwise fall back to default data
   const userData = user || DEFAULT_USER_DATA;
 
-  // Mock stats for quick summary with updated icons
-  const quickStats = [
+  // State declarations
+  const [teamRoles, setTeamRoles] = useState({});
+  const [upcomingHackathons, setUpcomingHackathons] = useState([]);
+  const [loadingHackathons, setLoadingHackathons] = useState(true);
+  const [hackathonError, setHackathonError] = useState(null);
+  const [userRegistrations, setUserRegistrations] = useState([]);
+  const [loadingRegistrations, setLoadingRegistrations] = useState(true);
+
+  // Calculate quick stats using useMemo to optimize performance
+  const quickStats = React.useMemo(() => [
     {
       id: 1,
       name: 'Hackathons',
-      value: 4,
+      value: userRegistrations.length || 0,
       icon: 'laptop-code',
       iconClass: 'fas fa-laptop-code',
       color: 'blue',
-      trend: '+2 this month',
-      percentage: 50,
-      description: 'Participated in 4 hackathons'
+      trend: `${userRegistrations.length > 0 ? '+1 registered' : 'No registrations'}`,
+      percentage: Math.min((userRegistrations.length / 10) * 100, 100), // Assuming 10 is max for 100%
+      description: `${userRegistrations.length} hackathon${userRegistrations.length !== 1 ? 's' : ''} registered`
     },
     {
       id: 2,
       name: 'Teams',
-      value: 3,
+      value: userRegistrations.filter(reg => reg.teamId || reg.team).length || 0,
       icon: 'users',
       iconClass: 'fas fa-users',
       color: 'yellow',
-      trend: '+1 this month',
-      percentage: 40,
-      description: 'Member of 3 teams'
+      trend: 'Active teams',
+      percentage: Math.min((userRegistrations.filter(reg => reg.teamId || reg.team).length / 5) * 100, 100), // Assuming 5 is max for 100%
+      description: 'Teams participated in'
     },
     {
       id: 3,
-      name: 'Challenges',
-      value: 8,
+      name: 'Upcoming',
+      value: upcomingHackathons.length || 0,
       icon: 'code',
       iconClass: 'fas fa-code',
       color: 'green',
-      trend: '+3 this week',
-      percentage: 75,
-      description: 'Completed 8 coding challenges'
+      trend: 'Available',
+      percentage: Math.min((upcomingHackathons.length / 10) * 100, 100), // Assuming 10 is max for 100%
+      description: 'Upcoming hackathons'
     },
     {
       id: 4,
-      name: 'Certificates',
-      value: 4,
+      name: 'Completed',
+      value: userRegistrations.filter(reg => reg.status === 'completed').length || 0,
       icon: 'award',
       iconClass: 'fas fa-award',
       color: 'purple',
-      trend: 'New achievement',
-      percentage: 40,
-      description: 'Earned 4 skill certificates'
+      trend: 'Finished',
+      percentage: Math.min((userRegistrations.filter(reg => reg.status === 'completed').length / userRegistrations.length) * 100, 100),
+      description: 'Completed hackathons'
     },
-  ];
+  ], [userRegistrations, upcomingHackathons]); // Dependencies for useMemo
 
-  // Fetch real approved hackathons
-  const [upcomingHackathons, setUpcomingHackathons] = useState([]);
-  const [loadingHackathons, setLoadingHackathons] = useState(true);
-  const [hackathonError, setHackathonError] = useState(null);
+  // Add function to check team role
+  const checkTeamRole = async (hackathonId) => {
+    try {
+      console.log('Checking team role for hackathon:', hackathonId);
+      const response = await teamAPI.checkTeamRole(hackathonId);
+      console.log('Team role response:', response.data);
 
-  // Add state for user registrations
-  const [userRegistrations, setUserRegistrations] = useState([]);
-  const [loadingRegistrations, setLoadingRegistrations] = useState(true);
+      if (response.data && response.data.success) {
+        setTeamRoles(prev => ({
+          ...prev,
+          [hackathonId]: response.data.data
+        }));
+      }
+    } catch (error) {
+      console.error(`Error checking team role for hackathon ${hackathonId}:`, error);
+      // Handle error state if needed
+      setTeamRoles(prev => ({
+        ...prev,
+        [hackathonId]: {
+          status: 'ERROR',
+          message: 'Error checking team status',
+          isRegistered: false,
+          isTeamLeader: false,
+          isTeamMember: false
+        }
+      }));
+    }
+  };
 
+  // Modify the useEffect for loading hackathons
   useEffect(() => {
     setLoadingHackathons(true);
     getApprovedHackathons(5)
       .then(res => {
         if (res.data && res.data.success) {
-          setUpcomingHackathons(res.data.data);
+          const hackathons = res.data.data;
+          setUpcomingHackathons(hackathons);
+          // Check team roles for each hackathon
+          hackathons.forEach(hackathon => {
+            const hackathonId = hackathon._id || hackathon.id;
+            if (hackathonId) {
+              checkTeamRole(hackathonId);
+            }
+          });
         } else {
           setUpcomingHackathons([]);
         }
         setLoadingHackathons(false);
       })
       .catch(err => {
+        console.error('Error loading hackathons:', err);
         setHackathonError('Failed to load hackathons');
         setUpcomingHackathons([]);
         setLoadingHackathons(false);
@@ -474,27 +512,52 @@ const UserDashboard = ({ user }) => {
                     {upcomingHackathons.map((hackathon) => {
                       const hackathonId = hackathon._id || hackathon.id;
                       const isRegistered = registeredHackathonIds.has(hackathonId);
+                      const teamRole = teamRoles[hackathonId];
 
                       return (
                         <div key={hackathonId} className="bg-gradient-to-br from-gray-800/70 via-gray-800/60 to-gray-900/70 rounded-lg border border-gray-700/50 shadow-md p-3 sm:p-4 hover:shadow-brand-900/20 hover:border-brand-700/30 transition-all duration-300 hover:-translate-y-1">
                           <div className="flex justify-between items-start mb-2">
                             <h4 className="font-medium text-white text-sm sm:text-base">{hackathon.title || hackathon.name}</h4>
                             <span className={`text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 border border-green-500/30`}>
-                              Approved
+                              {hackathon.status}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-400 mb-3">{hackathon.startDate ? new Date(hackathon.startDate).toLocaleDateString() : ''} - {hackathon.endDate ? new Date(hackathon.endDate).toLocaleDateString() : ''}</p>
-                          <div className="mb-2">
-                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                              <span>Status</span>
-                              <span>{hackathon.status}</span>
+                          <p className="text-xs text-gray-400 mb-3">
+                            {hackathon.startDate ? new Date(hackathon.startDate).toLocaleDateString() : ''} -
+                            {hackathon.endDate ? new Date(hackathon.endDate).toLocaleDateString() : ''}
+                          </p>
+
+                          {/* Add team role display */}
+                          {teamRole && (
+                            <div className="mb-2">
+                              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>Team Status</span>
+                                <span className={`px-2 py-0.5 rounded-full ${teamRole.status === 'TEAM_LEADER' ? 'bg-purple-900/50 text-purple-300 border border-purple-500/30' :
+                                  teamRole.status === 'TEAM_MEMBER' ? 'bg-blue-900/50 text-blue-300 border border-blue-500/30' :
+                                    teamRole.status === 'REGISTERED_NO_TEAM' ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-500/30' :
+                                      'bg-gray-900/50 text-gray-300 border border-gray-500/30'
+                                  }`}>
+                                  {teamRole.message}
+                                </span>
+                              </div>
+                              {teamRole.team && (
+                                <div className="text-xs text-gray-400">
+                                  <div className="flex justify-between items-center">
+                                    <span>Team: {teamRole.team.teamName}</span>
+                                  </div>
+                                  <div className="mt-1">
+                                    <span>Members: {teamRole.team.currentSize}/{teamRole.team.maxSize}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          )}
+
                           <div className="flex justify-between items-center mt-4">
                             <div className="text-xs bg-brand-900/50 text-brand-300 px-2 py-0.5 rounded-full border border-brand-500/30 inline-flex items-center">
                               <i className="far fa-clock mr-1 text-xs sm:text-sm"></i>
                             </div>
-                            {isRegistered ? (
+                            {isRegistered || (teamRoles[hackathonId] && teamRoles[hackathonId].isTeamMember) ? (
                               <Link
                                 to={`/dashboard/user/hackathons/${hackathonId}`}
                                 className="text-xs bg-gradient-to-r from-brand-700/20 to-brand-900/20 hover:from-brand-700/30 hover:to-brand-900/30 text-brand-700 hover:text-brand-900 px-3 py-1 rounded-lg transition-colors border border-brand-500/30"

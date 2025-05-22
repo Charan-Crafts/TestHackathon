@@ -1,112 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { teamAPI } from '../../../../services/api';
+import { toast } from 'react-hot-toast';
 
-function TeamInfoStep({ formData, updateFormData, nextStep, prevStep }) {
+function TeamInfoStep({ formData, updateFormData, nextStep, prevStep, hackathon }) {
   const [errors, setErrors] = useState({});
-  const [showTeammateForm, setShowTeammateForm] = useState(false);
-  const [currentTeammate, setCurrentTeammate] = useState({ name: '', email: '', role: '' });
-  const [teammateError, setTeammateError] = useState('');
-  
-  // Team size options
-  const teamSizeOptions = ['1', '2', '3', '4', '5'];
-  
-  // Teammate role options
-  const teammateRoleOptions = [
-    'Frontend Developer',
-    'Backend Developer',
-    'UI/UX Designer',
-    'Data Scientist',
-    'ML Engineer',
-    'Full Stack Developer',
-    'Mobile Developer',
-    'DevOps Engineer',
-    'Project Manager',
-    'Other'
-  ];
-  
+
+  // Add a useEffect to log the hackathon prop when it changes
+  useEffect(() => {
+    console.log('Hackathon prop:', hackathon);
+  }, [hackathon]);
+
   // Handle input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     updateFormData({ [name]: type === 'checkbox' ? checked : value });
   };
-  
-  // Handle teammate form changes
-  const handleTeammateChange = (e) => {
-    const { name, value } = e.target;
-    setCurrentTeammate(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-  
-  // Add teammate to the list
-  const addTeammate = () => {
-    // Validate teammate form
-    if (!currentTeammate.name.trim()) {
-      setTeammateError('Name is required');
-      return;
-    }
-    
-    if (!currentTeammate.email.trim()) {
-      setTeammateError('Email is required');
-      return;
-    } else if (!/^\S+@\S+\.\S+$/.test(currentTeammate.email)) {
-      setTeammateError('Please enter a valid email address');
-      return;
-    }
-    
-    if (!currentTeammate.role) {
-      setTeammateError('Role is required');
-      return;
-    }
-    
-    // Check if email already exists
-    if (formData.teammates.some(teammate => teammate.email === currentTeammate.email)) {
-      setTeammateError('A teammate with this email already exists');
-      return;
-    }
-    
-    // Add the new teammate
-    const updatedTeammates = [...formData.teammates, { ...currentTeammate, id: Date.now() }];
-    updateFormData({ teammates: updatedTeammates });
-    
-    // Reset form and hide it
-    setCurrentTeammate({ name: '', email: '', role: '' });
-    setTeammateError('');
-    setShowTeammateForm(false);
-  };
-  
+
   // Remove teammate from the list
   const removeTeammate = (id) => {
     const updatedTeammates = formData.teammates.filter(teammate => teammate.id !== id);
     updateFormData({ teammates: updatedTeammates });
   };
-  
+
   // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Form validation
     const newErrors = {};
     if (!formData.teamName.trim()) {
       newErrors.teamName = 'Team name is required';
     }
-    
-    // Validate team size consistency
-    const selectedTeamSize = parseInt(formData.teamSize);
-    const currentTeamSize = formData.teammates.length + 1; // +1 for the user
-    
-    if (currentTeamSize > selectedTeamSize) {
-      newErrors.teamSize = `You've added ${currentTeamSize - 1} teammates, but selected a team size of ${selectedTeamSize}`;
+
+    // Only validate team size if it's a team hackathon
+    if (hackathon?.maxTeamSize > 1) {
+      const selectedTeamSize = parseInt(formData.teamSize);
+      const currentTeamSize = formData.teammates.length + 1; // +1 for the user
+
+      if (currentTeamSize > selectedTeamSize) {
+        newErrors.teamSize = `You've added ${currentTeamSize - 1} teammates, but selected a team size of ${selectedTeamSize}`;
+      }
     }
-    
+
     setErrors(newErrors);
-    
+
     // If no errors, proceed to next step
     if (Object.keys(newErrors).length === 0) {
       nextStep();
     }
   };
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="text-center mb-8">
@@ -114,12 +58,14 @@ function TeamInfoStep({ formData, updateFormData, nextStep, prevStep }) {
           Team Information
         </h2>
         <p className="text-gray-400 mt-2">
-          Tell us about your team or join forces with other participants.
+          {hackathon?.maxTeamSize === 1
+            ? "Register as an individual participant."
+            : "Tell us about your team or join forces with other participants."}
         </p>
       </div>
-      
+
       <div className="space-y-6">
-        {/* Team Name Field */}
+        {/* Team Name Field - Always show */}
         <div>
           <label htmlFor="teamName" className="block text-sm font-medium text-gray-300 mb-1">
             Team Name <span className="text-purple-500">*</span>
@@ -137,76 +83,61 @@ function TeamInfoStep({ formData, updateFormData, nextStep, prevStep }) {
               value={formData.teamName}
               onChange={handleChange}
               className={`block w-full pl-10 pr-3 py-2.5 bg-gray-900/50 border ${errors.teamName ? 'border-red-500' : 'border-gray-600'} rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-100 placeholder-gray-500`}
-              placeholder="Enter your team name"
+              placeholder={hackathon?.maxTeamSize === 1 ? "Enter your participant name" : "Enter your team name"}
             />
           </div>
           {errors.teamName && (
             <p className="mt-1 text-sm text-red-500">{errors.teamName}</p>
           )}
         </div>
-        
-        {/* Team Size Field */}
-        <div>
-          <label htmlFor="teamSize" className="block text-sm font-medium text-gray-300 mb-1">
-            Team Size <span className="text-purple-500">*</span>
-          </label>
-          <select
-            id="teamSize"
-            name="teamSize"
-            value={formData.teamSize}
-            onChange={handleChange}
-            className={`block w-full pl-3 pr-10 py-2.5 bg-gray-900/50 border ${errors.teamSize ? 'border-red-500' : 'border-gray-600'} rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-100`}
-          >
-            {teamSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size} {parseInt(size) === 1 ? 'member' : 'members'}
-              </option>
-            ))}
-          </select>
-          {errors.teamSize && (
-            <p className="mt-1 text-sm text-red-500">{errors.teamSize}</p>
-          )}
-        </div>
-        
-        {/* Looking for Team Checkbox */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="lookingForTeam"
-            name="lookingForTeam"
-            checked={formData.lookingForTeam}
-            onChange={handleChange}
-            className="h-4 w-4 rounded border-gray-600 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900 bg-gray-900/50"
-          />
-          <label htmlFor="lookingForTeam" className="ml-2 block text-sm text-gray-300">
-            I'm looking for teammates
-          </label>
-        </div>
-        
-        {/* Teammates Section */}
-        {parseInt(formData.teamSize) > 1 && (
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-md font-medium text-gray-300">
-                Teammates ({formData.teammates.length}/{parseInt(formData.teamSize) - 1})
-              </h3>
-              {formData.teammates.length < parseInt(formData.teamSize) - 1 && !showTeammateForm && (
-                <button
-                  type="button"
-                  onClick={() => setShowTeammateForm(true)}
-                  className="px-3 py-1 bg-purple-600/30 text-purple-300 font-medium rounded-md border border-purple-500 hover:bg-purple-600/40 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
-                >
-                  Add Teammate
-                </button>
+
+        {/* Only show team-related fields if maxTeamSize > 1 */}
+        {hackathon?.maxTeamSize > 1 && (
+          <>
+            {/* Team Size Field */}
+            <div>
+              <label htmlFor="teamSize" className="block text-sm font-medium text-gray-300 mb-1">
+                Team Size <span className="text-purple-500">*</span>
+              </label>
+              <select
+                id="teamSize"
+                name="teamSize"
+                value={formData.teamSize}
+                onChange={handleChange}
+                className={`block w-full pl-3 pr-10 py-2.5 bg-gray-900/50 border ${errors.teamSize ? 'border-red-500' : 'border-gray-600'} rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-100`}
+              >
+                {Array.from({ length: hackathon.maxTeamSize - 1 }, (_, i) => String(i + 2)).map((size) => (
+                  <option key={size} value={size}>
+                    {size} {parseInt(size) === 1 ? 'member' : 'members'}
+                  </option>
+                ))}
+              </select>
+              {errors.teamSize && (
+                <p className="mt-1 text-sm text-red-500">{errors.teamSize}</p>
               )}
             </div>
-            
+
+            {/* Looking for Team Checkbox */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="lookingForTeam"
+                name="lookingForTeam"
+                checked={formData.lookingForTeam}
+                onChange={handleChange}
+                className="h-4 w-4 rounded border-gray-600 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900 bg-gray-900/50"
+              />
+              <label htmlFor="lookingForTeam" className="ml-2 block text-sm text-gray-300">
+                I'm looking for teammates
+              </label>
+            </div>
+
             {/* Teammate List */}
-            {formData.teammates.length > 0 ? (
+            {formData.teammates.length > 0 && (
               <div className="space-y-2 mb-4">
                 {formData.teammates.map((teammate) => (
-                  <div 
-                    key={teammate.id} 
+                  <div
+                    key={teammate.id}
                     className="flex items-center justify-between p-3 bg-gray-800/40 border border-gray-700 rounded-lg"
                   >
                     <div className="flex items-center">
@@ -234,98 +165,10 @@ function TeamInfoStep({ formData, updateFormData, nextStep, prevStep }) {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-gray-400 mb-4">
-                {!showTeammateForm && 'No teammates added yet.'}
-              </p>
             )}
-            
-            {/* Add Teammate Form */}
-            {showTeammateForm && (
-              <div className="p-4 bg-gray-800/40 border border-gray-700 rounded-lg mb-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-3">Add New Teammate</h4>
-                
-                {teammateError && (
-                  <div className="p-2 mb-3 bg-red-900/30 border border-red-800 rounded text-sm text-red-300">
-                    {teammateError}
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label htmlFor="teammateName" className="block text-xs font-medium text-gray-400 mb-1">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      id="teammateName"
-                      name="name"
-                      value={currentTeammate.name}
-                      onChange={handleTeammateChange}
-                      className="block w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-gray-100 placeholder-gray-500 text-sm"
-                      placeholder="Teammate's name"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="teammateEmail" className="block text-xs font-medium text-gray-400 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="teammateEmail"
-                      name="email"
-                      value={currentTeammate.email}
-                      onChange={handleTeammateChange}
-                      className="block w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-gray-100 placeholder-gray-500 text-sm"
-                      placeholder="Teammate's email"
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-2">
-                    <label htmlFor="teammateRole" className="block text-xs font-medium text-gray-400 mb-1">
-                      Role
-                    </label>
-                    <select
-                      id="teammateRole"
-                      name="role"
-                      value={currentTeammate.role}
-                      onChange={handleTeammateChange}
-                      className="block w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-transparent text-gray-100 text-sm"
-                    >
-                      <option value="">Select role</option>
-                      {teammateRoleOptions.map((role) => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowTeammateForm(false);
-                      setTeammateError('');
-                      setCurrentTeammate({ name: '', email: '', role: '' });
-                    }}
-                    className="px-3 py-1.5 text-sm bg-gray-700 text-gray-300 font-medium rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addTeammate}
-                    className="px-3 py-1.5 text-sm bg-purple-600 text-white font-medium rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          </>
         )}
-        
+
         {/* Team info notice */}
         <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4">
           <div className="flex">
@@ -336,15 +179,17 @@ function TeamInfoStep({ formData, updateFormData, nextStep, prevStep }) {
             </div>
             <div className="ml-3">
               <p className="text-sm text-blue-300">
-                {formData.lookingForTeam 
-                  ? "Your profile will be visible to other participants looking for teammates." 
-                  : "Not looking for teammates? You can still register as an individual or with your existing team."}
+                {hackathon?.maxTeamSize === 1
+                  ? "This is an individual participation hackathon."
+                  : formData.lookingForTeam
+                    ? "Your profile will be visible to other participants looking for teammates."
+                    : "Not looking for teammates? You can still register as an individual or with your existing team."}
               </p>
             </div>
           </div>
         </div>
       </div>
-      
+
       <div className="pt-5">
         <div className="flex justify-between">
           <button

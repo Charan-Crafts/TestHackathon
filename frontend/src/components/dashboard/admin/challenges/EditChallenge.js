@@ -48,6 +48,7 @@ const EditChallenge = () => {
     'Web Development',
     'Machine Learning'
   ];
+  const statusOptions = ['active', 'draft', 'archived'];
   
   // Fetch challenge data
   useEffect(() => {

@@ -714,8 +714,11 @@ function RoundsStep({ formData, updateFormData, nextStep, prevStep, isNavigating
                     <input
                       type="date"
                       value={round.startDate || ''}
+                      min={formData.startDate || ''}
+                      max={formData.endDate || ''}
                       onChange={(e) => handleRoundChange(index, 'startDate', e.target.value)}
-                      className={`w-full px-4 py-2 bg-gray-900/80 border ${errors[`round_${index}_startDate`] || errors[`round_${index}_dates`] || errors[`round_${index}_range`] ? 'border-red-500' : 'border-gray-700'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white`}
+                      className={`w-full px-4 py-2 bg-gray-900/80 border ${errors[`round_${index}_startDate`] || errors[`round_${index}_dates`] || errors[`round_${index}_range`] ? 'border-red-500' : 'border-gray-700'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white cursor-pointer`}
+                      onClick={(e) => e.target.showPicker()}
                     />
                     {errors[`round_${index}_startDate`] && <p className="mt-1 text-sm text-red-500">{errors[`round_${index}_startDate`]}</p>}
                   </div>
@@ -724,8 +727,11 @@ function RoundsStep({ formData, updateFormData, nextStep, prevStep, isNavigating
                     <input
                       type="date"
                       value={round.endDate || ''}
+                      min={round.startDate || formData.startDate || ''}
+                      max={formData.endDate || ''}
                       onChange={(e) => handleRoundChange(index, 'endDate', e.target.value)}
-                      className={`w-full px-4 py-2 bg-gray-900/80 border ${errors[`round_${index}_endDate`] || errors[`round_${index}_dates`] || errors[`round_${index}_range`] ? 'border-red-500' : 'border-gray-700'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white`}
+                      className={`w-full px-4 py-2 bg-gray-900/80 border ${errors[`round_${index}_endDate`] || errors[`round_${index}_dates`] || errors[`round_${index}_range`] ? 'border-red-500' : 'border-gray-700'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white cursor-pointer`}
+                      onClick={(e) => e.target.showPicker()}
                     />
                     {errors[`round_${index}_endDate`] && <p className="mt-1 text-sm text-red-500">{errors[`round_${index}_endDate`]}</p>}
                   </div>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { hackathonAPI } from '../../../../services/api';
+import { toast } from 'react-hot-toast';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
-function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
+function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating, hackathonId }) {
   const [errors, setErrors] = useState({});
-  const [imagePreview, setImagePreview] = useState(formData.image && typeof formData.image === 'string' ? formData.image : '');
+  const [imagePreview, setImagePreview] = useState(null);
   const [coOrganizers, setCoOrganizers] = useState(formData.coOrganizers || []);
   const [registrationFees, setRegistrationFees] = useState(formData.registrationFees || {
     1: 200,
@@ -13,12 +15,24 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
   });
   const [animateCoOrganizer, setAnimateCoOrganizer] = useState(-1);
   const [isUploading, setIsUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState(formData.imagePath || '');
+  const [brochurePreview, setBrochurePreview] = useState(formData.brochurePreview || '');
+  const [brochureFile, setBrochureFile] = useState(formData.brochureFile || null);
 
   const categories = [
     'Web Development', 'Mobile Development', 'Machine Learning',
     'Blockchain', 'Data Science', 'AR/VR', 'IoT',
     'Cybersecurity', 'Game Development', 'Open Innovation'
   ];
+
+  // Initialize image preview on component mount
+  useEffect(() => {
+    if (formData.imagePath) {
+      setImagePreview(`${process.env.REACT_APP_API_URL}${formData.imagePath}`);
+    } else if (formData.imagePreview) {
+      setImagePreview(formData.imagePreview);
+    }
+  }, [formData.imagePath, formData.imagePreview]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -40,84 +54,92 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
     }
   };
 
-  const handleImageChange = async (e) => {
+  const handleFileInputChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (2MB limit)
-      if (file.size > 2 * 1024 * 1024) {
-        setErrors(prev => ({
-          ...prev,
-          image: 'Image size should be less than 2MB'
-        }));
-        return;
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setErrors(prev => ({
-          ...prev,
-          image: 'Please upload a valid image file'
-        }));
-        return;
-      }
-
       try {
+        if (file.size > 2 * 1024 * 1024) {
+          setErrors(prev => ({
+            ...prev,
+            image: 'Image size should be less than 2MB'
+          }));
+          return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+          setErrors(prev => ({
+            ...prev,
+            image: 'Please upload a valid image file'
+          }));
+          return;
+        }
+
         setIsUploading(true);
+        const previewUrl = URL.createObjectURL(file);
+        setImagePreview(previewUrl);
 
-        // Create a preview URL for the image
-        const imagePreviewUrl = URL.createObjectURL(file);
-        setImagePreview(imagePreviewUrl);
+        if (hackathonId) {
+          const uploadFormData = new FormData();
+          uploadFormData.append('image', file);
+          uploadFormData.append('entityType', 'hackathon');
+          uploadFormData.append('entityId', hackathonId);
+          uploadFormData.append('isPublic', 'true');
 
-        // Store the file in formData for later upload
-        updateFormData({
-          imageFile: file,
-          imagePreview: imagePreviewUrl
-        });
-        console.log('DEBUG: imageFile set in formData:', file);
+          const response = await hackathonAPI.uploadHackathonImage(uploadFormData);
 
-        // Clear any previous image errors
-        setErrors(prev => ({
-          ...prev,
-          image: null
-        }));
+          if (response.data.success) {
+            const fileData = response.data.data;
+            setImagePreview(fileData.location); // Use S3 location
+            updateFormData({
+              imagePath: fileData.location,
+              imagePreview: fileData.location,
+              imageFile: null,
+              s3Key: fileData.s3Key,
+              s3Bucket: fileData.s3Bucket
+            });
+            toast.success('Image uploaded successfully');
+          }
+        } else {
+          updateFormData({
+            imageFile: file,
+            imagePreview: previewUrl,
+            imagePath: null
+          });
+        }
+
+        setErrors(prev => ({ ...prev, image: null }));
       } catch (error) {
         console.error('Error handling image:', error);
         setErrors(prev => ({
           ...prev,
           image: 'Failed to process image. Please try again.'
         }));
+        toast.error('Failed to upload image');
       } finally {
         setIsUploading(false);
       }
     }
   };
 
-  // Clean up preview URL when component unmounts
+  const handleRemoveImage = () => {
+    if (imagePreview && !imagePreview.startsWith(process.env.REACT_APP_API_URL)) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(null);
+    updateFormData({
+      imagePath: null,
+      imagePreview: null,
+      imageFile: null
+    });
+  };
+
   useEffect(() => {
     return () => {
-      if (imagePreview) {
+      if (imagePreview && !imagePreview.startsWith(process.env.REACT_APP_API_URL)) {
         URL.revokeObjectURL(imagePreview);
       }
     };
   }, [imagePreview]);
-
-  // Update image preview when formData changes
-  useEffect(() => {
-    if (formData.image && typeof formData.image === 'string') {
-      setImagePreview(formData.image);
-    }
-  }, [formData.image]);
-
-  useEffect(() => {
-    // Restore preview from formData.imagePreview or imageFile if available
-    if (formData.imagePreview) {
-      setImagePreview(formData.imagePreview);
-    } else if (formData.imageFile) {
-      const url = URL.createObjectURL(formData.imageFile);
-      setImagePreview(url);
-      updateFormData({ imagePreview: url });
-    }
-  }, []);
 
   const handleCoOrganizerAdd = () => {
     const newCoOrganizers = [...coOrganizers, { name: '', contact: '', email: '' }];
@@ -150,11 +172,84 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
     updateFormData({ registrationFees: updatedFees });
   };
 
+  const handleBrochureInputChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors(prev => ({
+          ...prev,
+          brochure: 'Brochure size should be less than 5MB'
+        }));
+        return;
+      }
+      if (!file.type.startsWith('application/pdf') && !file.type.startsWith('image/')) {
+        setErrors(prev => ({
+          ...prev,
+          brochure: 'Please upload a PDF or image file'
+        }));
+        return;
+      }
+
+      if (hackathonId) {
+        try {
+          const uploadFormData = new FormData();
+          uploadFormData.append('file', file);
+          uploadFormData.append('entityType', 'hackathon');
+          uploadFormData.append('entityId', hackathonId);
+          uploadFormData.append('isPublic', 'true');
+          uploadFormData.append('tags', JSON.stringify(['brochure']));
+
+          const response = await hackathonAPI.uploadHackathonBrochure(uploadFormData);
+
+          if (response.data.success) {
+            const fileData = response.data.data;
+            setBrochurePreview(file.type.startsWith('image/') ? fileData.location : file.name);
+            setBrochureFile(null);
+            updateFormData({
+              brochureFile: null,
+              brochurePath: fileData.location,
+              brochurePreview: file.type.startsWith('image/') ? fileData.location : file.name,
+              brochureS3Key: fileData.s3Key,
+              brochureS3Bucket: fileData.s3Bucket
+            });
+            toast.success('Brochure uploaded successfully');
+          }
+        } catch (error) {
+          console.error('Error uploading brochure:', error);
+          setErrors(prev => ({
+            ...prev,
+            brochure: 'Failed to upload brochure. Please try again.'
+          }));
+          toast.error('Failed to upload brochure');
+        }
+      } else {
+        setBrochureFile(file);
+        setBrochurePreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : file.name);
+        updateFormData({
+          brochureFile: file,
+          brochurePreview: file.type.startsWith('image/') ? URL.createObjectURL(file) : file.name
+        });
+      }
+      setErrors(prev => ({ ...prev, brochure: null }));
+    }
+  };
+
+  const handleRemoveBrochure = () => {
+    if (brochurePreview && brochureFile && brochureFile.type.startsWith('image/')) {
+      URL.revokeObjectURL(brochurePreview);
+    }
+    setBrochurePreview('');
+    setBrochureFile(null);
+    updateFormData({ brochureFile: null, brochurePreview: null });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Debug log for imageFile
     console.log('DEBUG: handleSubmit formData.imageFile', formData.imageFile);
+    // Debug log for brochureFile state
+    console.log('DEBUG: handleSubmit brochureFile state', brochureFile);
 
     // Skip validation if navigating (coming from a previous step)
     if (isNavigating) {
@@ -190,12 +285,12 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
       }
     }
 
-    // Check if registration deadline is before end date
-    if (formData.registrationDeadline && formData.endDate) {
+    // Check if registration deadline is before start date
+    if (formData.registrationDeadline && formData.startDate) {
       const deadline = new Date(formData.registrationDeadline);
-      const end = new Date(formData.endDate);
-      if (deadline >= end) {
-        newErrors.registrationDeadline = 'Registration deadline must be before end date';
+      const start = new Date(formData.startDate);
+      if (deadline >= start) {
+        newErrors.registrationDeadline = 'Registration deadline must be before the hackathon start date';
       }
     }
 
@@ -203,8 +298,77 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
 
     // If no errors, proceed to next step
     if (Object.keys(newErrors).length === 0) {
+      // Ensure brochureFile state is included in formData before proceeding
+      updateFormData({ ...formData, brochureFile: brochureFile });
       nextStep();
     }
+  };
+
+  const renderImagePreview = () => {
+    return (
+      <div className="w-full">
+        {imagePreview ? (
+          <div className="relative group">
+            <div className="w-full h-64 rounded-xl overflow-hidden bg-gray-900/40 shadow-lg transition-all duration-300 hover:shadow-cyan-500/20">
+              <img
+                src={imagePreview}
+                alt="Hackathon preview"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="absolute top-2 right-2 bg-red-500/80 backdrop-blur-sm text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all duration-300 shadow-lg"
+            >
+              <TrashIcon className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <div className="w-full h-64 flex items-center justify-center px-6 py-6 border-2 border-dashed border-cyan-500/30 rounded-xl bg-gray-900/40 hover:bg-gray-900/60 transition-all duration-300 group cursor-pointer"
+            onClick={() => document.getElementById('image-upload').click()}>
+            <div className="space-y-4 text-center">
+              <div className="mx-auto h-16 w-16 text-cyan-400 group-hover:text-cyan-300 transition-colors duration-300">
+                <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="image-upload" className="relative cursor-pointer rounded-md font-medium text-cyan-400 hover:text-cyan-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-cyan-500">
+                  <span className="inline-flex items-center px-4 py-2 bg-cyan-900/30 rounded-lg hover:bg-cyan-900/50 transition-all duration-300">
+                    {isUploading ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Uploading...
+                      </span>
+                    ) : (
+                      'Upload an image'
+                    )}
+                  </span>
+                  <input
+                    id="image-upload"
+                    name="image"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={handleFileInputChange}
+                    disabled={isUploading}
+                  />
+                </label>
+                <p className="text-sm text-gray-400">or drag and drop</p>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF up to 2MB</p>
+              </div>
+            </div>
+          </div>
+        )}
+        {errors.image && (
+          <p className="mt-2 text-sm text-red-500 animate-pulse">{errors.image}</p>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -309,64 +473,74 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
 
         {/* Hackathon Image */}
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-cyan-300 mb-1">
+          <label className="block text-sm font-medium text-cyan-300 mb-2">
             Hackathon Image *
           </label>
-          <div className="mb-6">
-            <div className="mt-1 relative">
-              {/* Preview */}
-              {(formData.image && typeof formData.image === 'string') || imagePreview ? (
-                <div className="mb-3">
-                  <img
-                    src={formData.image && typeof formData.image === 'string' ? formData.image : imagePreview}
-                    alt="Hackathon banner preview"
-                    className="h-40 w-full object-contain rounded-lg border border-blue-500/30 bg-black"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateFormData({ image: '', imageFile: null, imagePreview: '' });
-                      setImagePreview('');
-                      setErrors(prev => ({ ...prev, image: null }));
-                    }}
-                    className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded-full"
-                  >
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) :
-                <div className="flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-blue-700 rounded-lg">
-                  <div className="space-y-1 text-center">
-                    <svg className="mx-auto h-12 w-12 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <div className="flex text-sm text-gray-400">
-                      <label htmlFor="image-upload" className="relative cursor-pointer bg-blue-900/30 rounded-md font-medium text-blue-400 hover:text-blue-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500 px-3 py-2">
-                        <span>{isUploading ? 'Uploading...' : 'Upload an image'}</span>
-                        <input
-                          id="image-upload"
-                          name="image"
-                          type="file"
-                          accept="image/*"
-                          className="sr-only"
-                          onChange={handleImageChange}
-                          disabled={isUploading}
-                        />
-                      </label>
-                      <p className="pl-1 pt-2">or drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPG, GIF up to 2MB
-                    </p>
+          <div className="w-full">
+            {renderImagePreview()}
+          </div>
+        </div>
+
+        {/* Brochure Upload */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-cyan-300 mb-2">
+            Hackathon Brochure (PDF or Image, max 5MB)
+          </label>
+          <div className="w-full">
+            {brochurePreview ? (
+              <div className="relative group">
+                {brochureFile && brochureFile.type.startsWith('image/') ? (
+                  <div className="w-full h-48 rounded-xl overflow-hidden bg-gray-900/40 shadow-lg transition-all duration-300 hover:shadow-cyan-500/20">
+                    <img
+                      src={brochurePreview}
+                      alt="Brochure preview"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
+                ) : (
+                  <div className="flex items-center space-x-2 bg-gray-900/40 rounded-lg p-4">
+                    <span className="text-cyan-400">{brochurePreview}</span>
+                    <a
+                      href={URL.createObjectURL(brochureFile)}
+                      download={brochureFile.name}
+                      className="text-blue-400 underline text-xs"
+                    >
+                      Download
+                    </a>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRemoveBrochure}
+                  className="absolute top-2 right-2 bg-red-500/80 backdrop-blur-sm text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all duration-300 shadow-lg"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-full h-24 flex items-center justify-center px-6 py-6 border-2 border-dashed border-cyan-500/30 rounded-xl bg-gray-900/40 hover:bg-gray-900/60 transition-all duration-300 group cursor-pointer"
+                onClick={() => document.getElementById('brochure-upload').click()}>
+                <div className="space-y-2 text-center">
+                  <label htmlFor="brochure-upload" className="relative cursor-pointer rounded-md font-medium text-cyan-400 hover:text-cyan-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-cyan-500">
+                    <span className="inline-flex items-center px-4 py-2 bg-cyan-900/30 rounded-lg hover:bg-cyan-900/50 transition-all duration-300">
+                      Upload Brochure
+                    </span>
+                    <input
+                      id="brochure-upload"
+                      name="brochure"
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className="sr-only"
+                      onChange={handleBrochureInputChange}
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500">PDF or image, up to 5MB</p>
                 </div>
-              }
-              {errors.image && (
-                <p className="mt-1 text-sm text-red-400">{errors.image}</p>
-              )}
-            </div>
+              </div>
+            )}
+            {errors.brochure && (
+              <p className="mt-2 text-sm text-red-500 animate-pulse">{errors.brochure}</p>
+            )}
           </div>
         </div>
 
@@ -436,6 +610,7 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
             name="startDate"
             value={formData.startDate}
             onChange={handleChange}
+            onClick={(e) => e.target.showPicker()}
             className={`w-full px-4 py-2 bg-gray-900/80 border ${errors.startDate ? 'border-red-500' : 'border-cyan-500/50'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white`}
           />
           {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate}</p>}
@@ -451,6 +626,8 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
             name="endDate"
             value={formData.endDate}
             onChange={handleChange}
+            onClick={(e) => e.target.showPicker()}
+            min={formData.startDate}
             className={`w-full px-4 py-2 bg-gray-900/80 border ${errors.endDate ? 'border-red-500' : 'border-cyan-500/50'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white`}
           />
           {errors.endDate && <p className="mt-1 text-sm text-red-500">{errors.endDate}</p>}
@@ -466,6 +643,8 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
             name="registrationDeadline"
             value={formData.registrationDeadline}
             onChange={handleChange}
+            onClick={(e) => e.target.showPicker()}
+            max={formData.startDate}
             className={`w-full px-4 py-2 bg-gray-900/80 border ${errors.registrationDeadline ? 'border-red-500' : 'border-cyan-500/50'} rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white`}
           />
           {errors.registrationDeadline && <p className="mt-1 text-sm text-red-500">{errors.registrationDeadline}</p>}
@@ -592,7 +771,9 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
               const teamSize = index + 1;
               return (
                 <div key={teamSize} className="transition-all duration-300 transform hover:scale-105 hover:bg-gray-900/40 p-3 rounded-lg">
-                  <label className="block text-xs text-gray-400 mb-1">{teamSize} {teamSize === 1 ? 'Member' : 'Members'}</label>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    {teamSize} {teamSize === 1 ? 'Member' : 'Members'}
+                  </label>
                   <input
                     type="number"
                     value={registrationFees[teamSize] === 0 ? 0 : registrationFees[teamSize] || ''}
@@ -622,7 +803,7 @@ function BasicInfoStep({ formData, updateFormData, nextStep, isNavigating }) {
                 name="whatsappLink"
                 value={formData.whatsappLink || ''}
                 onChange={handleChange}
-                placeholder="WhatsApp Group Link"
+                placeholder="Linked In Group Link"
                 className="w-full px-4 py-2 bg-gray-900/80 border border-cyan-500/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white placeholder-gray-500"
               />
             </div>

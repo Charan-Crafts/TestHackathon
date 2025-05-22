@@ -184,82 +184,32 @@ export const verificationAPI = {
 
 // Hackathon API services
 export const hackathonAPI = {
-    // Get all hackathons with filtering and pagination
-    getAllHackathons: (page = 1, limit = 10, filters = {}) => {
-        const queryParams = new URLSearchParams({
-            page,
-            limit,
-            ...filters
-        }).toString();
-
-        return API.get(`/hackathons?${queryParams}`);
-    },
-
-    // Get a single hackathon by ID
-    getHackathonById: (id) => API.get(`/hackathons/${id}`),
-
     // Create a new hackathon
-    createHackathon: async (hackathonData) => {
+    create: (hackathonData) => {
         const formData = new FormData();
 
-        // Debug: check imageFile and image URL before appending
-        console.log('DEBUG: hackathonData.imageFile', hackathonData.imageFile);
-        console.log('DEBUG: hackathonData.image', hackathonData.image);
-
-        const hasFile = hackathonData.imageFile instanceof File;
-        const hasUrl = typeof hackathonData.image === 'string' && hackathonData.image.trim() !== '';
-
-        if (!hasFile && !hasUrl) {
-            alert('Please provide a hackathon image (upload or URL).');
-            throw new Error('No hackathon image provided!');
-        }
-
-        // Append the image (file or URL)
-        if (hasFile) {
+        // Handle image file
+        if (hackathonData.imageFile instanceof File) {
             formData.append('image', hackathonData.imageFile);
-        } else if (hasUrl) {
-            formData.append('image', hackathonData.image);
         }
 
-        // Format coOrganizers data
-        let coOrganizers = [];
-        if (hackathonData.coOrganizers) {
-            try {
-                // If it's a string, parse it
-                if (typeof hackathonData.coOrganizers === 'string') {
-                    coOrganizers = JSON.parse(hackathonData.coOrganizers);
-                } else if (Array.isArray(hackathonData.coOrganizers)) {
-                    coOrganizers = hackathonData.coOrganizers;
-                }
-
-                // Ensure each co-organizer has the required fields
-                coOrganizers = coOrganizers
-                    .filter(org => org && typeof org === 'object')
-                    .map(org => ({
-                        name: org.name || '',
-                        contact: org.contact || '',
-                        email: org.email || ''
-                    }))
-                    .filter(org => org.name && org.email); // Only keep valid entries
-            } catch (e) {
-                console.error('Error parsing coOrganizers:', e);
-                coOrganizers = [];
-            }
+        // Handle brochure file (must be 'brochure' field)
+        if (hackathonData.brochureFile instanceof File) {
+            formData.append('brochure', hackathonData.brochureFile);
         }
-        formData.append('coOrganizers', JSON.stringify(coOrganizers));
 
-        // Append the rest (skip imageFile, imagePreview, image, coOrganizers)
+        // Handle all other fields
         Object.keys(hackathonData).forEach(key => {
-            if (key === 'imageFile' || key === 'imagePreview' || key === 'image' || key === 'coOrganizers') return;
-
-            if (typeof hackathonData[key] === 'object') {
-                formData.append(key, JSON.stringify(hackathonData[key]));
-            } else {
-                formData.append(key, hackathonData[key]);
+            if (key !== 'imageFile' && key !== 'imagePreview' && key !== 'brochureFile' && key !== 'brochurePreview') {
+                if (typeof hackathonData[key] === 'object' && !(hackathonData[key] instanceof File)) {
+                    formData.append(key, JSON.stringify(hackathonData[key]));
+                } else if (hackathonData[key] !== null && hackathonData[key] !== undefined) {
+                    formData.append(key, hackathonData[key]);
+                }
             }
         });
 
-        // Debug: log all FormData entries
+        // Debug: Log all FormData entries
         for (let pair of formData.entries()) {
             console.log('FormData:', pair[0], pair[1]);
         }
@@ -271,25 +221,65 @@ export const hackathonAPI = {
         });
     },
 
-    // Update an existing hackathon
-    updateHackathon: (id, hackathonData) => API.put(`/hackathons/${id}`, hackathonData),
-
-    // Delete a hackathon
-    deleteHackathon: (id) => API.delete(`/hackathons/${id}`),
+    // Alias for backward compatibility
+    createHackathon: function (hackathonData) {
+        return this.create(hackathonData);
+    },
 
     // Upload hackathon image
-    uploadHackathonImage: async (formData, hackathonId) => {
-        try {
-            const response = await API.post(`/hackathons/${hackathonId}/upload-image`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Error uploading hackathon image:', error);
-            throw error;
+    uploadHackathonImage: (formData, hackathonId) => {
+        return API.post(`/hackathons/${hackathonId}/image`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+    },
+
+    // Get all hackathons with optional filters
+    getAll: (params = {}) => {
+        return API.get('/hackathons', { params });
+    },
+
+    // Get a specific hackathon by ID
+    getById: (id) => {
+        return API.get(`/hackathons/${id}`);
+    },
+
+    // Alias for getById to maintain consistency
+    getHackathonById: function (id) {
+        return this.getById(id);
+    },
+
+    // Update a hackathon
+    update: (id, data) => {
+        const formData = new FormData();
+        Object.keys(data).forEach(key => {
+            if (data[key] !== null && data[key] !== undefined) {
+                if (key === 'imageFile' && data[key] instanceof File) {
+                    formData.append('image', data[key]);
+                } else if (key === 'brochureFile' && data[key] instanceof File) {
+                    formData.append('brochure', data[key]);
+                } else if (key !== 'imagePreview' && key !== 'brochurePreview') {
+                    formData.append(key, data[key]);
+                }
+            }
+        });
+
+        // Debug: Log all FormData entries
+        for (let pair of formData.entries()) {
+            console.log('FormData:', pair[0], pair[1]);
         }
+
+        return API.put(`/hackathons/${id}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+    },
+
+    // Delete a hackathon
+    delete: (id) => {
+        return API.delete(`/hackathons/${id}`);
     },
 
     // Get hackathons created by the current user
@@ -578,6 +568,75 @@ export const submissionAPI = {
     getTestLinkUUID: (submissionId) => API.get(`/submissions/test-link/${submissionId}`),
 
     // ... existing submission API methods ...
+};
+
+// Team Matching API services
+export const teamMatchingAPI = {
+    // Get all teams
+    getAllTeams: async () => {
+        console.log('Making API call to get all teams');
+        try {
+            const response = await API.get('/teams');
+            console.log('All teams API response:', response);
+            return response;
+        } catch (error) {
+            console.error('Failed to get teams:', error);
+            throw error;
+        }
+    },
+
+    // Get user's teams
+    getUserTeams: async (userId) => {
+        console.log('Making API call to get teams for user:', userId);
+        try {
+            const response = await API.get(`/teams/user/${userId}`);
+            console.log('API response received:', response);
+            return response;
+        } catch (error) {
+            console.error('API call failed:', error.response || error);
+            throw error;
+        }
+    },
+
+    // Get all participants looking for team across all hackathons
+    getAllParticipantsLookingForTeam: () => API.get('/team-matching/looking-for-team'),
+
+    // Get participants looking for team in a specific hackathon
+    getParticipantsLookingForTeam: (hackathonId) =>
+        API.get(`/team-matching/looking-for-team/${hackathonId}`),
+
+    // Update team preferences
+    updateTeamPreferences: (registrationId, preferences) =>
+        API.put(`/team-matching/preferences/${registrationId}`, preferences),
+
+    // Get team suggestions based on skills
+    getTeamSuggestions: (hackathonId) =>
+        API.get(`/team-matching/suggestions/${hackathonId}`),
+
+    // Request to join a team
+    requestToJoinTeam: (teamId) =>
+        API.post(`/teams/${teamId}/request`, {}),
+
+    // Leave a team
+    leaveTeam: (teamId) => API.post(`/teams/${teamId}/leave`),
+};
+
+// Team API services
+export const teamAPI = {
+    // Check team role for a specific hackathon
+    checkTeamRole: async (hackathonId) => {
+        try {
+            const response = await API.get(`/teams/role/${hackathonId}`);
+            console.log('Team role check response:', response.data);
+            return response;
+        } catch (error) {
+            console.error('Error checking team role:', error);
+            throw error;
+        }
+    },
+    // Invite a user to the team
+    inviteTeamMember: (teamId, invitedUserId) =>
+        API.post(`/teams/${teamId}/invite`, { invitedUserId }),
 };
 
 export default API; 

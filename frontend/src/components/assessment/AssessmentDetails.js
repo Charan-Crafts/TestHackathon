@@ -1,9 +1,13 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const AssessmentDetails = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Get the submission ID from the URL
+    const submissionId = location.pathname.split('/').pop();
 
     const handleBack = () => {
         // Navigate back to the submissions list

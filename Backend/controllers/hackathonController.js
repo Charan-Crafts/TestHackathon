@@ -40,7 +40,6 @@ exports.getHackathons = async (req, res) => {
 
         // Execute query with pagination
         const hackathons = await Hackathon.find(filter)
-            .populate('imageFile', 'fileUrl')
             .sort({ createdAt: -1 })
             .skip(startIndex)
             .limit(limit);
@@ -80,7 +79,6 @@ exports.getHackathons = async (req, res) => {
 exports.getHackathon = async (req, res) => {
     try {
         const hackathon = await Hackathon.findById(req.params.id)
-            .populate('imageFile', 'fileUrl')
             .populate('organizerId', 'firstName lastName email');
 
         if (!hackathon) {
@@ -118,6 +116,9 @@ exports.createHackathon = async (req, res, next) => {
         // Add organizer ID from authenticated user
         req.body.organizerId = req.user.id;
 
+        // Debug: Log req.files to see uploaded files
+        console.log('req.files in createHackathon:', req.files);
+
         // Convert numeric fields
         if (req.body.maxTeamSize) {
             req.body.maxTeamSize = parseInt(req.body.maxTeamSize, 10);
@@ -127,6 +128,13 @@ exports.createHackathon = async (req, res, next) => {
         }
         if (req.body.prize) {
             req.body.prize = parseInt(req.body.prize, 10);
+        }
+        // Convert academic prerequisite fields
+        if (req.body.tenthMarks) {
+            req.body.tenthMarks = parseFloat(req.body.tenthMarks);
+        }
+        if (req.body.twelfthMarks) {
+            req.body.twelfthMarks = parseFloat(req.body.twelfthMarks);
         }
 
         // Check if required fields are provided
@@ -289,24 +297,31 @@ exports.createHackathon = async (req, res, next) => {
             }
         }
 
-        // If there's an image file in the request, create the File first
+        // Handle image file (support both single and fields upload)
         if (req.file) {
-            const file = await File.create({
-                fileName: req.file.filename,
-                originalName: req.file.originalname,
-                filePath: req.file.path,
-                fileSize: req.file.size,
-                fileType: req.file.mimetype,
-                uploadedBy: req.user.id,
-                entityType: 'hackathon'
-            });
-            req.body.image = file._id;
-            req.body.imageFile = file._id;
+            req.body.imagePath = `/uploads/${req.file.filename}`;
+        } else if (req.files && req.files.image && req.files.image.length > 0) {
+            req.body.imagePath = `/uploads/${req.files.image[0].filename}`;
         } else if (req.body.image && typeof req.body.image === 'string' && req.body.image.startsWith('http')) {
-            // If image is a URL, store as imageUrl
-            req.body.imageUrl = req.body.image;
-            delete req.body.image;
+            req.body.imagePath = req.body.image;
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: 'Hackathon image is required'
+            });
         }
+
+        // Handle brochure file (optional)
+        if (req.files && req.files.brochure && req.files.brochure.length > 0) {
+            console.log('Brochure file found:', req.files.brochure[0]); // Debug brochure file details
+            req.body.brochurePath = `/uploads/${req.files.brochure[0].filename}`;
+        }
+
+        // Remove old fields if they exist
+        delete req.body.image;
+        delete req.body.imageFile;
+        delete req.body.brochureFile;
+        delete req.body.brochurePreview;
 
         // Create hackathon
         const hackathon = await Hackathon.create(req.body);
@@ -335,6 +350,9 @@ exports.updateHackathon = async (req, res) => {
                 message: 'Hackathon not found'
             });
         }
+
+        // Debug: Log req.files to see uploaded files
+        console.log('req.files in updateHackathon:', req.files);
 
         // Check ownership or admin access
         if (hackathon.organizerId.toString() !== req.user.id && req.user.role !== 'admin') {
@@ -417,6 +435,25 @@ exports.updateHackathon = async (req, res) => {
                 }
             }
         }
+
+        // Handle image file (support both single and fields upload)
+        if (req.file) {
+            req.body.imagePath = `/uploads/${req.file.filename}`;
+        } else if (req.files && req.files.image && req.files.image.length > 0) {
+            req.body.imagePath = `/uploads/${req.files.image[0].filename}`;
+        }
+
+        // Handle brochure file (optional)
+        if (req.files && req.files.brochure && req.files.brochure.length > 0) {
+            console.log('Brochure file found:', req.files.brochure[0]); // Debug brochure file details
+            req.body.brochurePath = `/uploads/${req.files.brochure[0].filename}`;
+        }
+
+        // Remove old fields if they exist
+        delete req.body.image;
+        delete req.body.imageFile;
+        delete req.body.brochureFile;
+        delete req.body.brochurePreview;
 
         // Update hackathon
         hackathon = await Hackathon.findByIdAndUpdate(req.params.id, req.body, {
@@ -528,30 +565,14 @@ exports.uploadHackathonImage = async (req, res) => {
             });
         }
 
-        // Create file record
-        const file = new File({
-            fileName: req.file.filename,
-            originalName: req.file.originalname,
-            filePath: req.file.path,
-            fileSize: req.file.size,
-            fileType: req.file.mimetype,
-            entityType: 'hackathon',
-            entityId: hackathon._id,
-            uploadedBy: req.user.id,
-            isPublic: true
-        });
-
-        await file.save();
-
-        // Update hackathon with image reference
-        hackathon.image = file._id;
+        // Update hackathon with new image path
+        hackathon.imagePath = `/uploads/${req.file.filename}`;
         await hackathon.save();
 
         return res.status(200).json({
             success: true,
             data: {
-                fileId: file._id,
-                fileUrl: file.fileUrl
+                imagePath: hackathon.imagePath
             }
         });
     } catch (error) {
@@ -644,7 +665,6 @@ exports.getMyHackathons = async (req, res) => {
 
         // Get hackathons created by this user
         const hackathons = await Hackathon.find({ organizerId: req.user.id })
-            .populate('imageFile', 'fileUrl')
             .sort({ createdAt: -1 })
             .skip(startIndex)
             .limit(limit);

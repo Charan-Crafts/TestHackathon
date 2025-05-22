@@ -339,10 +339,13 @@ const HackathonSchema = new mongoose.Schema({
     },
 
     // Images
-    image: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'File',
+    imagePath: {
+        type: String,
         required: [true, 'Hackathon image is required']
+    },
+    brochurePath: {
+        type: String,
+        trim: true
     },
 
     // Status and Categories
@@ -390,6 +393,22 @@ const HackathonSchema = new mongoose.Schema({
         type: String,
         trim: true
     }],
+    // Academic Prerequisites
+    tenthMarks: {
+        type: Number,
+        min: [0, '10th marks cannot be negative'],
+        max: [100, '10th marks cannot exceed 100'],
+        required: [true, '10th standard marks are required']
+    },
+    twelfthMarks: {
+        type: Number,
+        min: [0, '12th marks cannot be negative'],
+        max: [100, '12th marks cannot exceed 100'],
+        required: [true, '12th standard marks are required']
+    },
+    // Student eligibility criteria fields
+    studentBranches: [String], // e.g., ['CSE', 'ECE']
+    studentMinPercentage: Number, // e.g., 60
     rules: {
         type: String,
         trim: true
@@ -466,14 +485,6 @@ const HackathonSchema = new mongoose.Schema({
 }, {
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
-});
-
-// Virtual for imageFile
-HackathonSchema.virtual('imageFile', {
-    ref: 'File',
-    localField: 'image',
-    foreignField: '_id',
-    justOne: true
 });
 
 // Virtual for formatted dates

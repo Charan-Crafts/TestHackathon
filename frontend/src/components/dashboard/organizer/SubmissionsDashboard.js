@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { hackathonAPI } from '../../../services/api';
+import { getImageUrl } from '../../../utils/imageHelper';
 
 // Import components
 import RoundSubmissions from './submissions/components/RoundSubmissions';
@@ -9,11 +10,9 @@ import RoundSubmissions from './submissions/components/RoundSubmissions';
 import '../../../styles/CustomScrollbar.css';
 
 const SubmissionsDashboard = ({ user }) => {
-  const { id: routeHackathonId } = useParams();
+  const { hackathonId, roundId } = useParams();
+  const navigate = useNavigate();
   const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const queryHackathonId = searchParams.get('hackathon');
-  const hackathonId = routeHackathonId || queryHackathonId;
 
   const [hackathons, setHackathons] = useState([]);
   const [selectedHackathon, setSelectedHackathon] = useState(null);
@@ -36,6 +35,14 @@ const SubmissionsDashboard = ({ user }) => {
             if (hackathon) {
               setSelectedHackathon(hackathon);
               setRounds(hackathon.rounds || []);
+
+              // If roundId is also provided, select that round
+              if (roundId) {
+                const round = hackathon.rounds?.find(r => r._id === roundId);
+                if (round) {
+                  setSelectedRound(round);
+                }
+              }
             }
           }
         }
@@ -48,24 +55,24 @@ const SubmissionsDashboard = ({ user }) => {
     };
 
     fetchHackathons();
-  }, [hackathonId]);
+  }, [hackathonId, roundId]);
 
   // Handle hackathon selection
   const handleHackathonSelect = (hackathon) => {
-    setSelectedHackathon(hackathon);
-    setRounds(hackathon.rounds || []);
-    setSelectedRound(null);
+    navigate(`/dashboard/organizer/submissions/${hackathon._id}`);
   };
 
   // Handle back to hackathons
   const handleBackToHackathons = () => {
-    setSelectedHackathon(null);
-    setRounds([]);
-    setSelectedRound(null);
+    navigate('/dashboard/organizer/submissions');
   };
 
   const handleRoundSelect = (round) => {
-    setSelectedRound(round);
+    navigate(`/dashboard/organizer/submissions/${selectedHackathon._id}/${round._id}`);
+  };
+
+  const handleBackToRounds = () => {
+    navigate(`/dashboard/organizer/submissions/${selectedHackathon._id}`);
   };
 
   // Render hackathons list
@@ -104,7 +111,7 @@ const SubmissionsDashboard = ({ user }) => {
               <div className="flex-shrink-0">
                 <div className="h-16 w-16 rounded-lg overflow-hidden">
                   <img
-                    src={hackathon.imageFile?.fileUrl || `https://picsum.photos/seed/${hackathon._id}/400/300`}
+                    src={getImageUrl(hackathon.imagePath) || `https://picsum.photos/seed/${hackathon._id}/400/300`}
                     alt={hackathon.title}
                     className="h-full w-full object-cover"
                   />
