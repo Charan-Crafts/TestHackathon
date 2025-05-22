@@ -8,7 +8,7 @@
     "install": "concurrently \"cd Backend && npm install\" \"cd frontend && npm install\"",
     "dev": "concurrently \"cd Backend && npm run start\" \"cd frontend && npm start\""
   },
-  "keywords": [hacker],
+  "keywords": ['hacker'],
   "author": "",
   "license": "ISC",
   "dependencies": {
