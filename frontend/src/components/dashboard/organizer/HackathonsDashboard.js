@@ -5,7 +5,6 @@ import { getImageUrl } from '../../../utils/imageHelper';
 
 // Import components
 import HackathonStatsCards from './hackathons/components/HackathonStatsCards';
-import HackathonFilters from './hackathons/components/HackathonFilters';
 import HackathonTable from './hackathons/components/HackathonTable';
 
 // Import hooks
@@ -15,11 +14,9 @@ const HackathonsManagement = ({ user }) => {
   const navigate = useNavigate();
   const [hackathons, setHackathons] = useState([]);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'card'
-  const [loading, setLoading] = useState(true);
 
   // Fetch hackathons created by the current organizer
   useEffect(() => {
-    setLoading(true);
     hackathonAPI.getMyHackathons(1, 100)
       .then(res => {
         if (res.data && res.data.success) {
@@ -45,11 +42,9 @@ const HackathonsManagement = ({ user }) => {
         } else {
           setHackathons([]);
         }
-        setLoading(false);
       })
       .catch(() => {
         setHackathons([]);
-        setLoading(false);
       });
   }, []);
 

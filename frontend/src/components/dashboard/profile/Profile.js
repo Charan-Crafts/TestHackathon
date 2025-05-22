@@ -1,10 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import {
-  TrophyIcon,
-  FireIcon,
-  DocumentTextIcon,
-  RocketLaunchIcon
-} from '@heroicons/react/24/outline';
 
 // Import components
 import ProfileHeader from './components/ProfileHeader';
@@ -116,7 +110,7 @@ const Profile = ({ user }) => {
         socials: profileData.socials || [],
       });
     }
-  }, [profileData]);
+  }, [profileData, profileFormData.email]);
 
   // Handle form input changes for profile
   const handleProfileChange = (e) => {
@@ -183,23 +177,6 @@ const Profile = ({ user }) => {
     } catch (err) {
       setError('Failed to upload file');
       console.error('File upload error:', err);
-    }
-  };
-
-  // Handle file deletion
-  const handleFileDelete = async (fileId) => {
-    try {
-      await profileAPI.deleteProfileFile(fileId);
-      // Update the profile data to remove the deleted file
-      setProfileData(prev => ({
-        ...prev,
-        resume: prev.resume === fileId ? null : prev.resume,
-        certifications: prev.certifications.filter(cert => cert.file !== fileId),
-        achievements: prev.achievements.filter(achievement => achievement.file !== fileId)
-      }));
-    } catch (err) {
-      setError('Failed to delete file');
-      console.error('File deletion error:', err);
     }
   };
 

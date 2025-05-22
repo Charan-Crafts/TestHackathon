@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircleIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useCallback } from 'react';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
-import API, { verificationAPI } from '../../../services/api';
+import { verificationAPI } from '../../../services/api';
 import VerificationPending from './VerificationPending';
 
 const OrganizerVerificationForm = () => {
@@ -32,15 +32,12 @@ const OrganizerVerificationForm = () => {
     const [step, setStep] = useState(1); // 1: Personal Details, 2: Organization Details, 3: Review
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [uploadedFiles, setUploadedFiles] = useState({
-        photoIdProof: null,
-        organizationIdProof: null
-    });
+  
     const [verificationStatus, setVerificationStatus] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     // Check if user is already verified or has a pending verification
-    const checkVerificationStatus = async () => {
+    const checkVerificationStatus = useCallback(async () => {
         try {
             setIsLoading(true);
             const response = await verificationAPI.getVerificationStatus();
@@ -83,12 +80,12 @@ const OrganizerVerificationForm = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [updateUserRole]);
 
     useEffect(() => {
         // Check verification status when component mounts
         checkVerificationStatus();
-    }, []);
+    }, [checkVerificationStatus]);
 
     // Prefill with user data if available
     useEffect(() => {

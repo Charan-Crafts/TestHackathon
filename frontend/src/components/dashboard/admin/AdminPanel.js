@@ -2,7 +2,6 @@ import React from 'react';
 import {
   UsersIcon,
   PresentationChartLineIcon,
-  WrenchScrewdriverIcon,
   DocumentCheckIcon,
   ShieldCheckIcon,
   CogIcon,
@@ -10,7 +9,7 @@ import {
   CodeBracketIcon
 } from '@heroicons/react/24/outline';
 
-const AdminPanel = ({ user }) => {
+const AdminPanel = () => {
   // Mock stats for admin dashboard
   const quickStats = [
     {
