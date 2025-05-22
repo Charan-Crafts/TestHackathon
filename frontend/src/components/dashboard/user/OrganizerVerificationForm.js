@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import API, { verificationAPI } from '../../../services/api';
-import axios from 'axios';
 import VerificationPending from './VerificationPending';
 
 const OrganizerVerificationForm = () => {
@@ -190,9 +189,14 @@ const OrganizerVerificationForm = () => {
             // Create FormData object for file uploads
             const uploadFormData = new FormData();
 
-            // Append files with correct field names
-            uploadFormData.append('photoIdProof', formData.photoIdProof);
-            uploadFormData.append('organizationIdProof', formData.organizationIdProof);
+            // Log file details for debugging
+            console.log('Uploading photoIdProof:', formData.photoIdProof.name, formData.photoIdProof.type);
+            console.log('Uploading organizationIdProof:', formData.organizationIdProof.name, formData.organizationIdProof.type);
+
+            // Append files with proper field names and entityType
+            uploadFormData.append('photoIdProof', formData.photoIdProof, formData.photoIdProof.name);
+            uploadFormData.append('organizationIdProof', formData.organizationIdProof, formData.organizationIdProof.name);
+            uploadFormData.append('entityType', 'user');
 
             // Use verificationAPI service
             const response = await verificationAPI.uploadProofs(uploadFormData);
@@ -308,16 +312,16 @@ const OrganizerVerificationForm = () => {
                 return;
             }
 
-            // Log what we're sending
-            console.log('Photo ID:', formData.photoIdProof.name, formData.photoIdProof.type);
-            console.log('Org ID:', formData.organizationIdProof.name, formData.organizationIdProof.type);
-
-            // Create a FormData with EXACT field names
+            // Create FormData object
             const testFormData = new FormData();
-            testFormData.append('photoIdProof', formData.photoIdProof);
-            testFormData.append('organizationIdProof', formData.organizationIdProof);
 
-            // Add the entityType field with a valid enum value
+            // Log file details for debugging
+            console.log('Testing photoIdProof:', formData.photoIdProof.name, formData.photoIdProof.type);
+            console.log('Testing organizationIdProof:', formData.organizationIdProof.name, formData.organizationIdProof.type);
+
+            // Append files with proper field names and filenames
+            testFormData.append('photoIdProof', formData.photoIdProof, formData.photoIdProof.name);
+            testFormData.append('organizationIdProof', formData.organizationIdProof, formData.organizationIdProof.name);
             testFormData.append('entityType', 'user');
 
             // Use verificationAPI service instead of direct axios call

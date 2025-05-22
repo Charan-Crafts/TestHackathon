@@ -71,6 +71,7 @@ export const authAPI = {
         }
         return response;
     },
+
     login: async (credentials) => {
         const response = await API.post('/auth/login', credentials);
         if (response.data.success && response.data.token) {
@@ -152,11 +153,17 @@ export const verificationAPI = {
     submitVerification: (verificationData) => API.post('/verifications', verificationData),
 
     // Upload verification documents (photo ID and organization ID)
-    uploadProofs: (formData) => API.post('/verifications/upload-proofs', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data' // Override the default content type for file uploads
-        }
-    }),
+    uploadProofs: (formData) => {
+        // Ensure proper headers for FormData
+        const config = {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'Accept': 'application/json'
+            },
+            transformRequest: (data) => data // Prevent axios from trying to transform FormData
+        };
+        return API.post('/verifications/upload-proofs', formData, config);
+    },
 
     // Get verification status of the current user
     getVerificationStatus: () => API.get('/verifications/status'),
